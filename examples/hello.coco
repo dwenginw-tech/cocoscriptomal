@@ -1,0 +1,25 @@
+#include "io"
+
+func main()
+    print("CocoScript v0.1")
+
+    local x = 42
+
+    if x > 100 then
+        print("big")
+    elseif x > 30 then
+        print("medium")
+    elseif x > 10 then
+        print("small")
+    else
+        print("tiny")
+    end
+
+    local i = 0
+    while i < 3 do
+        print(i)
+        i = i + 1
+    end
+
+    print("done")
+end
