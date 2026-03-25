@@ -1,148 +1,185 @@
+(* lexer.ml — tokenizer for CocoScript
+   Scans source text into a flat token list.
+   Handles: keywords, identifiers, numbers (int + float),
+   string literals, operators, and Lua-style -- comments. *)
+
+(* keyword table — checked after we finish scanning an identifier *)
 let keywords = [
-  "func", Token.Func;
-  "local", Token.Local;
-  "if", Token.If;
-  "then", Token.Then;
-  "else", Token.Else;
+  "func",   Token.Func;
+  "local",  Token.Local;
+  "if",     Token.If;
+  "then",   Token.Then;
+  "else",   Token.Else;
   "elseif", Token.ElseIf;
-  "end", Token.End;
-  "while", Token.While;
-  "do", Token.Do;
-  "for", Token.For;
+  "end",    Token.End;
+  "while",  Token.While;
+  "do",     Token.Do;
+  "for",    Token.For;
   "return", Token.Return;
-  "and", Token.And;
-  "or", Token.Or;
-  "not", Token.Not;
-  "true", Token.True;
-  "false", Token.False;
-  "nil", Token.Nil;
+  "and",    Token.And;
+  "or",     Token.Or;
+  "not",    Token.Not;
+  "true",   Token.True;
+  "false",  Token.False;
+  "nil",    Token.Nil;
 ]
 
-type state = {
-  src : string;
+(* The scanner state. We track `line` so we can report meaningful
+   error positions later — every '\n' we consume bumps it. *)
+type lexer = {
+  input : string;
   mutable pos : int;
   mutable line : int;
 }
 
-let create src = { src; pos = 0; line = 1 }
+let create input = { input; pos = 0; line = 1 }
 
-let at_end s = s.pos >= String.length s.src
+let at_end l = l.pos >= String.length l.input
 
-let peek s =
-  if at_end s then '\000'
-  else s.src.[s.pos]
+(* Look at current char without consuming it. Returns null byte at EOF
+   so callers don't need to bounds-check separately. *)
+let peek l =
+  if at_end l then '\000'
+  else l.input.[l.pos]
 
-let advance s =
-  let c = s.src.[s.pos] in
-  s.pos <- s.pos + 1;
-  if c = '\n' then s.line <- s.line + 1;
-  c
+(* Consume the current character, advancing the cursor.
+   Also handles line tracking — bump line count on newlines. *)
+let bump l =
+  let ch = l.input.[l.pos] in
+  l.pos <- l.pos + 1;
+  if ch = '\n' then l.line <- l.line + 1;
+  ch
 
-let skip_whitespace s =
-  while not (at_end s) && (peek s = ' ' || peek s = '\t' || peek s = '\r') do
-    ignore (advance s)
+let skip_whitespace l =
+  while not (at_end l) && (peek l = ' ' || peek l = '\t' || peek l = '\r') do
+    ignore (bump l)
   done
 
-let skip_comment s =
-  while not (at_end s) && peek s <> '\n' do
-    ignore (advance s)
+(* -- starts a line comment, same as Lua/Haskell.
+   We just eat everything until the next newline. *)
+let skip_line_comment l =
+  while not (at_end l) && peek l <> '\n' do
+    ignore (bump l)
   done
 
-let read_string s =
+(* Scan a double-quoted string literal. We've already seen the opening
+   quote in the caller, so start by consuming it here. *)
+let scan_string l =
   let buf = Buffer.create 16 in
-  ignore (advance s);
-  while not (at_end s) && peek s <> '"' do
-    Buffer.add_char buf (advance s)
+  ignore (bump l);
+  while not (at_end l) && peek l <> '"' do
+    Buffer.add_char buf (bump l)
   done;
-  if not (at_end s) then ignore (advance s);
+  if not (at_end l) then ignore (bump l); (* closing quote *)
   Token.StringLit (Buffer.contents buf)
 
-let read_number s =
+(* Scan a numeric literal.
+   Floats: if we hit a dot after digits, keep going and tag it
+   as a float instead of an int. *)
+let scan_number l =
   let buf = Buffer.create 8 in
-  let is_float = ref false in
-  while not (at_end s) && (peek s >= '0' && peek s <= '9' || peek s = '.') do
-    if peek s = '.' then is_float := true;
-    Buffer.add_char buf (advance s)
+  let saw_dot = ref false in
+  while not (at_end l) && (peek l >= '0' && peek l <= '9' || peek l = '.') do
+    if peek l = '.' then saw_dot := true;
+    Buffer.add_char buf (bump l)
   done;
-  let str = Buffer.contents buf in
-  if !is_float then Token.FloatLit (float_of_string str)
-  else Token.IntLit (int_of_string str)
+  let raw = Buffer.contents buf in
+  if !saw_dot then Token.FloatLit (float_of_string raw)
+  else Token.IntLit (int_of_string raw)
 
-let read_ident s =
+(* Scan an identifier or keyword. We grab [a-zA-Z0-9_]+ and then
+   check whether the result lives in the keywords table. *)
+let scan_word l =
   let buf = Buffer.create 8 in
-  while not (at_end s) && (let c = peek s in
-    (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-    (c >= '0' && c <= '9') || c = '_') do
-    Buffer.add_char buf (advance s)
+  while not (at_end l) && (let ch = peek l in
+    (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+    (ch >= '0' && ch <= '9') || ch = '_') do
+    Buffer.add_char buf (bump l)
   done;
   let word = Buffer.contents buf in
   match List.assoc_opt word keywords with
   | Some tok -> tok
   | None -> Token.Ident word
 
-let rec next_token s =
-  skip_whitespace s;
-  if at_end s then Token.Eof
+(* Main dispatch: figure out what kind of token starts at the current
+   position and return it. Whitespace is skipped beforehand. *)
+let rec read_token l =
+  skip_whitespace l;
+  if at_end l then Token.Eof
   else
-    let c = peek s in
+    let c = peek l in
     match c with
-    | '\n' -> ignore (advance s); Token.Newline
-    | '#' -> ignore (advance s); Token.Hash
-    | '"' -> read_string s
-    | '+' -> ignore (advance s); Token.Plus
+    | '\n' -> ignore (bump l); Token.Newline
+    | '#'  -> ignore (bump l); Token.Hash
+    | '"'  -> scan_string l
+
+    (* simple single-char operators *)
+    | '+' -> ignore (bump l); Token.Plus
+    | '*' -> ignore (bump l); Token.Star
+    | '/' -> ignore (bump l); Token.Slash
+    | '%' -> ignore (bump l); Token.Percent
+    | '(' -> ignore (bump l); Token.LParen
+    | ')' -> ignore (bump l); Token.RParen
+    | '{' -> ignore (bump l); Token.LBrace
+    | '}' -> ignore (bump l); Token.RBrace
+    | '[' -> ignore (bump l); Token.LBracket
+    | ']' -> ignore (bump l); Token.RBracket
+    | ',' -> ignore (bump l); Token.Comma
+    | ':' -> ignore (bump l); Token.Colon
+
+    (* minus or line comment *)
     | '-' ->
-      ignore (advance s);
-      if not (at_end s) && peek s = '-' then
-        (skip_comment s; Token.Newline)
+      ignore (bump l);
+      if not (at_end l) && peek l = '-' then
+        (skip_line_comment l; Token.Newline)
       else Token.Minus
-    | '*' -> ignore (advance s); Token.Star
-    | '/' -> ignore (advance s); Token.Slash
-    | '%' -> ignore (advance s); Token.Percent
-    | '(' -> ignore (advance s); Token.LParen
-    | ')' -> ignore (advance s); Token.RParen
-    | '{' -> ignore (advance s); Token.LBrace
-    | '}' -> ignore (advance s); Token.RBrace
-    | '[' -> ignore (advance s); Token.LBracket
-    | ']' -> ignore (advance s); Token.RBracket
-    | ',' -> ignore (advance s); Token.Comma
-    | ':' -> ignore (advance s); Token.Colon
+
+    (* dot or dot-dot (string concatenation) *)
     | '.' ->
-      ignore (advance s);
-      if not (at_end s) && peek s = '.' then
-        (ignore (advance s); Token.DotDot)
+      ignore (bump l);
+      if not (at_end l) && peek l = '.' then
+        (ignore (bump l); Token.DotDot)
       else Token.Dot
+
     | '=' ->
-      ignore (advance s);
-      if not (at_end s) && peek s = '=' then
-        (ignore (advance s); Token.EqEq)
+      ignore (bump l);
+      if not (at_end l) && peek l = '=' then
+        (ignore (bump l); Token.EqEq)
       else Token.Eq
     | '!' ->
-      ignore (advance s);
-      if not (at_end s) && peek s = '=' then
-        (ignore (advance s); Token.NotEq)
+      ignore (bump l);
+      if not (at_end l) && peek l = '=' then
+        (ignore (bump l); Token.NotEq)
       else Token.Not
     | '<' ->
-      ignore (advance s);
-      if not (at_end s) && peek s = '=' then
-        (ignore (advance s); Token.LtEq)
+      ignore (bump l);
+      if not (at_end l) && peek l = '=' then
+        (ignore (bump l); Token.LtEq)
       else Token.Lt
     | '>' ->
-      ignore (advance s);
-      if not (at_end s) && peek s = '=' then
-        (ignore (advance s); Token.GtEq)
+      ignore (bump l);
+      if not (at_end l) && peek l = '=' then
+        (ignore (bump l); Token.GtEq)
       else Token.Gt
-    | c when c >= '0' && c <= '9' -> read_number s
-    | c when (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c = '_' ->
-      read_ident s
-    | _ ->
-      ignore (advance s);
-      next_token s
 
-let tokenize src =
-  let s = create src in
+    (* numbers start with a digit *)
+    | c when c >= '0' && c <= '9' -> scan_number l
+    (* identifiers / keywords start with a letter or underscore *)
+    | c when (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c = '_' ->
+      scan_word l
+
+    (* anything we don't recognise — skip it and try again *)
+    | _ ->
+      ignore (bump l);
+      read_token l
+
+(* Public entry point. Tokenize the entire source string and return
+   the token list, terminated by Eof. *)
+let tokenize source =
+  let l = create source in
   let tokens = ref [] in
   let rec loop () =
-    let tok = next_token s in
+    let tok = read_token l in
     tokens := tok :: !tokens;
     if tok <> Token.Eof then loop ()
   in

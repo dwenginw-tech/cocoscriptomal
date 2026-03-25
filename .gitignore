@@ -2,3 +2,4 @@ _build/
 *.obj
 *.asm
 *.exe
+tools/
