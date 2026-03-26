@@ -1,0 +1,41 @@
+class Dog
+    func init(name, age)
+        self.name = name
+        self.age = age
+    end
+
+    func bark()
+        print("Woof!")
+    end
+
+    func info()
+        print(self.name)
+        print(self.age)
+    end
+end
+
+class Cat
+    func init(name)
+        self.name = name
+        self.lives = 9
+    end
+
+    func meow()
+        print("Meow!")
+    end
+
+    func describe()
+        print(self.name)
+        print(self.lives)
+    end
+end
+
+func main()
+    local d = Dog("Rex", 5)
+    d.bark()
+    d.info()
+
+    local c = Cat("Whiskers")
+    c.meow()
+    c.describe()
+end

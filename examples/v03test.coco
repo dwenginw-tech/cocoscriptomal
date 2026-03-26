@@ -1,0 +1,53 @@
+*// CocoScript v0.3 test
+
+class Dog
+    func init(name, age)
+        self.name = name
+        self.age = age
+    end
+    func bark()
+        print("Woof!")
+    end
+    func info()
+        print(self.name)
+        print(self.age)
+    end
+end
+
+func main()
+    *// classes
+    local d = Dog("Rex", 5)
+    d.bark()
+    d.info()
+
+    *// closures
+    local x = 10
+    local add = func(y)
+        return x + y
+    end
+    print(add(5))
+    print(add(20))
+
+    *// for-each
+    local nums = {10, 20, 30}
+    for n in nums do
+        print(n)
+    end
+
+    *// push and pop
+    local items = {1, 2, 3}
+    push(items, 4)
+    push(items, 5)
+    print(len(items))
+    print(pop(items))
+    print(len(items))
+
+    *// for-each after push
+    local names = {"alice", "bob"}
+    push(names, "charlie")
+    for name in names do
+        print(name)
+    end
+
+    halt()
+end

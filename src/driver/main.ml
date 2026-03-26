@@ -1,8 +1,3 @@
-(* main.ml — CocoScript compiler entry point
-   Pipeline is straightforward: read the source file, hand it to
-   Compiler.compile, done. The compiler module handles everything
-   from lexing through to producing the final .exe. *)
-
 let () =
   if Array.length Sys.argv < 2 then begin
     Printf.printf "CocoScript Compiler v0.1\n";

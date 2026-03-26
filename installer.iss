@@ -15,7 +15,11 @@ ChangesEnvironment=yes
 Source: "_build\default\src\main.exe"; DestDir: "{app}"; DestName: "cocoscript.exe"; Flags: ignoreversion
 Source: "tools\nasm.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "tools\gcc.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
+Source: "tools\ld.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
+Source: "tools\as.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "tools\*.dll"; DestDir: "{app}\tools"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "tools\lib\gcc\x86_64-w64-mingw32\15.2.0\*"; DestDir: "{app}\tools\lib\gcc\x86_64-w64-mingw32\15.2.0"; Flags: ignoreversion
+Source: "tools\x86_64-w64-mingw32\lib\*"; DestDir: "{app}\tools\x86_64-w64-mingw32\lib"; Flags: ignoreversion
 Source: "examples\*"; DestDir: "{app}\examples"; Flags: ignoreversion
 Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion

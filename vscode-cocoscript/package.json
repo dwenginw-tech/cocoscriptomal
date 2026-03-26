@@ -1,0 +1,46 @@
+{
+  "name": "cocoscript",
+  "displayName": "CocoScript",
+  "description": "Syntax highlighting for the CocoScript programming language",
+  "version": "0.1.0",
+  "publisher": "applejuicestudios",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": ["Programming Languages"],
+  "icon": "icon.png",
+  "contributes": {
+    "languages": [
+      {
+        "id": "cocoscript",
+        "aliases": ["CocoScript", "cocoscript"],
+        "extensions": [".coco"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "cocoscript",
+        "scopeName": "source.cocoscript",
+        "path": "./syntaxes/cocoscript.tmLanguage.json"
+      }
+    ],
+    "taskDefinitions": [
+      {
+        "type": "cocoscript"
+      }
+    ],
+    "problemMatchers": [
+      {
+        "name": "cocoscript",
+        "owner": "cocoscript",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "line (\\d+): (.*)$",
+          "line": 1,
+          "message": 2
+        }
+      }
+    ]
+  }
+}

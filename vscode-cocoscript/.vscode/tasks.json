@@ -1,0 +1,42 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "CocoScript: Build",
+      "type": "shell",
+      "command": "cocoscript",
+      "args": ["${file}"],
+      "group": "build",
+      "problemMatcher": "$cocoscript",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "CocoScript: Build & Run",
+      "type": "shell",
+      "command": "cocoscript ${file} && ${fileDirname}\\${fileBasenameNoExtension}.exe",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": "$cocoscript",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "CocoScript: Run",
+      "type": "shell",
+      "command": "${fileDirname}\\${fileBasenameNoExtension}.exe",
+      "group": "test",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    }
+  ]
+}

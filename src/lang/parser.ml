@@ -1,8 +1,3 @@
-(* parser.ml — recursive descent parser for CocoScript
-   Loosely based on Lua's grammar with C-style includes.
-   Precedence climbing: or < and < cmp < add < mul < unary < postfix
-   Supports if/elseif/else, while/do, for, func definitions. *)
-
 type pstate = {
   tokens : Token.t array;
   mutable pos : int;
@@ -12,7 +7,6 @@ type pstate = {
 let make_parser tokens =
   { tokens = Array.of_list tokens; pos = 0; line = 1 }
 
-(* Return whichever token we're sitting on without consuming it. *)
 let current p =
   if p.pos >= Array.length p.tokens then Token.Eof
   else p.tokens.(p.pos)
@@ -27,17 +21,13 @@ let expect p tok =
   if got <> tok then
     failwith (Printf.sprintf "line %d: expected token, got something else" p.line)
 
-(* Burn through any newlines, bumping the line counter as we go. *)
 let skip_nl p =
   while current p = Token.Newline do ignore (eat p); p.line <- p.line + 1 done
 
-(* ---- Expression parsing (Pratt-style / precedence climbing) ----
-   Each level calls the next-higher-precedence level for its operands,
-   then checks if the current token belongs to its own precedence tier. *)
+let block_ref : (pstate -> Ast.stmt list) ref = ref (fun _ -> [])
 
 let rec expr p = or_expr p
 
-(* right-associative for now, might change later *)
 and or_expr p =
   let lhs = and_expr p in
   if current p = Token.Or then
@@ -50,7 +40,6 @@ and and_expr p =
     (ignore (eat p); Ast.BinOp (And, lhs, and_expr p))
   else lhs
 
-(* Comparisons are non-associative — we only parse one operator. *)
 and cmp_expr p =
   let lhs = add_expr p in
   match current p with
@@ -84,16 +73,56 @@ and unary_expr p =
   | Token.Not   -> ignore (eat p); Ast.UnaryOp (Not, unary_expr p)
   | _ -> postfix_expr p
 
-(* Postfix: table indexing with brackets *)
 and postfix_expr p =
-  let e = atom p in
-  match current p with
-  | Token.LBracket ->
-    ignore (eat p);
-    let idx = expr p in
-    expect p Token.RBracket;
-    Ast.Index (e, idx)
-  | _ -> e
+  let e = ref (atom p) in
+  let continue = ref true in
+  while !continue do
+    match current p with
+    | Token.LBracket ->
+      ignore (eat p);
+      let idx = expr p in
+      expect p Token.RBracket;
+      e := Ast.Index (!e, idx)
+    | Token.Dot ->
+      ignore (eat p);
+      let field = match eat p with
+        | Token.Ident n -> n
+        | _ -> failwith (Printf.sprintf "line %d: expected field name after dot" p.line)
+      in
+      if current p = Token.LParen then begin
+        ignore (eat p);
+        let args = ref [] in
+        if current p <> Token.RParen then begin
+          args := [expr p];
+          while current p = Token.Comma do
+            ignore (eat p);
+            args := expr p :: !args
+          done
+        end;
+        expect p Token.RParen;
+        e := Ast.MethodCall (!e, field, List.rev !args)
+      end else
+        e := Ast.FieldGet (!e, field)
+    | _ -> continue := false
+  done;
+  !e
+
+and lambda_expr p =
+  ignore (eat p);
+  expect p Token.LParen;
+  let params = ref [] in
+  if current p <> Token.RParen then begin
+    params := [(match eat p with Token.Ident n -> n | _ -> failwith (Printf.sprintf "line %d: expected param name" p.line))];
+    while current p = Token.Comma do
+      ignore (eat p);
+      params := (match eat p with Token.Ident n -> n | _ -> failwith (Printf.sprintf "line %d: expected param name" p.line)) :: !params
+    done
+  end;
+  expect p Token.RParen;
+  skip_nl p;
+  let body = !block_ref p in
+  expect p Token.End;
+  Ast.Lambda (List.rev !params, body)
 
 and atom p =
   match current p with
@@ -103,6 +132,7 @@ and atom p =
   | Token.True  -> ignore (eat p); Ast.BoolLit true
   | Token.False -> ignore (eat p); Ast.BoolLit false
   | Token.Nil   -> ignore (eat p); Ast.Nil
+  | Token.Func -> lambda_expr p
   | Token.LBrace -> table_lit p
   | Token.LParen ->
     ignore (eat p);
@@ -113,6 +143,9 @@ and atom p =
     ignore (eat p);
     if current p = Token.LParen then call_args p name
     else Ast.Ident name
+  | Token.Self ->
+    ignore (eat p);
+    Ast.Ident "self"
   | _ -> failwith (Printf.sprintf "line %d: unexpected token in expression" p.line)
 
 and call_args p fname =
@@ -145,8 +178,6 @@ and table_lit p =
   expect p Token.RBrace;
   Ast.TableLit (List.rev !elems)
 
-(* ---- Statement parsing ---- *)
-
 let rec stmt p =
   skip_nl p;
   match current p with
@@ -155,7 +186,9 @@ let rec stmt p =
   | Token.While  -> while_stmt p
   | Token.For    -> for_stmt p
   | Token.Return -> return_stmt p
+  | Token.Break -> ignore (eat p); Ast.Break
   | Token.Ident _ -> ident_stmt p
+  | Token.Self -> self_stmt p
   | _ -> expr_stmt p
 
 and local_decl p =
@@ -164,11 +197,26 @@ and local_decl p =
     | Token.Ident n -> n
     | _ -> failwith (Printf.sprintf "line %d: expected identifier" p.line)
   in
-  expect p Token.Eq;
-  let value = expr p in
-  Ast.LocalDecl (name, value)
+  if current p = Token.Comma then begin
+    let names = ref [name] in
+    while current p = Token.Comma do
+      ignore (eat p);
+      names := (match eat p with Token.Ident n -> n | _ -> failwith (Printf.sprintf "line %d: expected identifier" p.line)) :: !names
+    done;
+    expect p Token.Eq;
+    let exprs = ref [expr p] in
+    while current p = Token.Comma do
+      ignore (eat p);
+      exprs := expr p :: !exprs
+    done;
+    let pairs = List.combine (List.rev !names) (List.rev !exprs) in
+    Ast.MultiDecl pairs
+  end else begin
+    expect p Token.Eq;
+    let e = expr p in
+    Ast.LocalDecl (name, e)
+  end
 
-(* elseif desugars into nested if — same as lua *)
 and if_stmt p =
   expect p Token.If;
   let cond = expr p in
@@ -209,7 +257,6 @@ and elseif_chain p =
   in
   Ast.IfStmt (cond, body, else_branch)
 
-(* block ends at `end`, `else`, or `elseif` token *)
 and if_block p =
   let acc = ref [] in
   skip_nl p;
@@ -233,27 +280,59 @@ and for_stmt p =
     | Token.Ident n -> n
     | _ -> failwith (Printf.sprintf "line %d: expected identifier" p.line)
   in
-  expect p Token.Eq;
-  let lo = expr p in
-  expect p Token.Comma;
-  let hi = expr p in
-  expect p Token.Do;
-  let body = block p in
-  expect p Token.End;
-  Ast.ForStmt (var, lo, hi, body)
+  if current p = Token.In then begin
+    ignore (eat p);
+    let collection = expr p in
+    expect p Token.Do;
+    let body = block p in
+    expect p Token.End;
+    Ast.ForEach (var, collection, body)
+  end else begin
+    expect p Token.Eq;
+    let lo = expr p in
+    expect p Token.Comma;
+    let hi = expr p in
+    expect p Token.Do;
+    let body = block p in
+    expect p Token.End;
+    Ast.ForStmt (var, lo, hi, body)
+  end
 
 and return_stmt p =
   expect p Token.Return;
   let value = expr p in
   Ast.Return value
 
-(* Starts with an identifier — could be assignment, index-assign, call, or bare ident *)
 and ident_stmt p =
   let name = match eat p with
     | Token.Ident n -> n
     | _ -> failwith (Printf.sprintf "line %d: expected identifier" p.line)
   in
-  if current p = Token.Eq then begin
+  if current p = Token.Dot then begin
+    ignore (eat p);
+    let field = match eat p with
+      | Token.Ident n -> n
+      | _ -> failwith (Printf.sprintf "line %d: expected field name after dot" p.line)
+    in
+    if current p = Token.Eq then begin
+      ignore (eat p);
+      let value = expr p in
+      Ast.FieldSet (Ast.Ident name, field, value)
+    end else if current p = Token.LParen then begin
+      ignore (eat p);
+      let args = ref [] in
+      if current p <> Token.RParen then begin
+        args := [expr p];
+        while current p = Token.Comma do
+          ignore (eat p);
+          args := expr p :: !args
+        done
+      end;
+      expect p Token.RParen;
+      Ast.ExprStmt (Ast.MethodCall (Ast.Ident name, field, List.rev !args))
+    end else
+      Ast.ExprStmt (Ast.FieldGet (Ast.Ident name, field))
+  end else if current p = Token.Eq then begin
     ignore (eat p);
     let rhs = expr p in
     Ast.Assign (name, rhs)
@@ -270,6 +349,35 @@ and ident_stmt p =
   end else
     Ast.ExprStmt (Ast.Ident name)
 
+and self_stmt p =
+  ignore (eat p);
+  if current p = Token.Dot then begin
+    ignore (eat p);
+    let field = match eat p with
+      | Token.Ident n -> n
+      | _ -> failwith (Printf.sprintf "line %d: expected field name after self." p.line)
+    in
+    if current p = Token.Eq then begin
+      ignore (eat p);
+      let value = expr p in
+      Ast.FieldSet (Ast.Ident "self", field, value)
+    end else if current p = Token.LParen then begin
+      ignore (eat p);
+      let args = ref [] in
+      if current p <> Token.RParen then begin
+        args := [expr p];
+        while current p = Token.Comma do
+          ignore (eat p);
+          args := expr p :: !args
+        done
+      end;
+      expect p Token.RParen;
+      Ast.ExprStmt (Ast.MethodCall (Ast.Ident "self", field, List.rev !args))
+    end else
+      Ast.ExprStmt (Ast.FieldGet (Ast.Ident "self", field))
+  end else
+    Ast.ExprStmt (Ast.Ident "self")
+
 and expr_stmt p =
   let e = expr p in
   Ast.ExprStmt e
@@ -283,7 +391,7 @@ and block p =
   done;
   List.rev !acc
 
-(* ---- Top-level constructs ---- *)
+let () = block_ref := block
 
 let include_directive p =
   expect p Token.Hash;
@@ -317,9 +425,33 @@ let func_def p =
   expect p Token.End;
   { Ast.name; params = List.rev !params; body }
 
-(* Main entry point — called from compiler.ml as Parser.parse.
-   Walks the top-level token stream looking for #include directives
-   and function definitions, nothing else is allowed at file scope. *)
+(* methods get mangled names (ClassName_method) with self as first param *)
+let parse_class p =
+  expect p Token.Class;
+  let name = match eat p with
+    | Token.Ident n -> n
+    | _ -> failwith (Printf.sprintf "line %d: expected class name" p.line)
+  in
+  skip_nl p;
+  let methods = ref [] in
+  while current p <> Token.End && current p <> Token.Eof do
+    skip_nl p;
+    if current p = Token.Func then
+      methods := func_def p :: !methods
+    else
+      skip_nl p
+  done;
+  expect p Token.End;
+  let method_infos = List.rev_map (fun (f : Ast.func_def) ->
+    { Class.mname = f.name; params = f.params; body = f.body }
+  ) (List.rev !methods) in
+  let _cls = Class.register_class name method_infos in
+  List.rev_map (fun (f : Ast.func_def) ->
+    { f with
+      name = name ^ "_" ^ f.name;
+      params = if List.mem "self" f.params then f.params else "self" :: f.params }
+  ) (List.rev !methods)
+
 let parse tokens : Ast.program =
   let p = make_parser tokens in
   let includes = ref [] in
@@ -332,8 +464,10 @@ let parse tokens : Ast.program =
       includes := include_directive p :: !includes
     else if current p = Token.Func then
       funcs := func_def p :: !funcs
+    else if current p = Token.Class then
+      funcs := parse_class p @ !funcs
     else
-      failwith (Printf.sprintf "line %d: expected #include or func at top level" p.line);
+      failwith (Printf.sprintf "line %d: expected #include, func, or class at top level" p.line);
     skip_nl p
   done;
   { includes = List.rev !includes; functions = List.rev !funcs }

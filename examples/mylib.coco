@@ -1,0 +1,7 @@
+func square(x)
+    return x * x
+end
+
+func cube(x)
+    return x * x * x
+end

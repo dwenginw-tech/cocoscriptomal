@@ -1,0 +1,8 @@
+#include "io"
+#include "mylib"
+
+func main()
+    print(square(5))
+    print(cube(3))
+    halt()
+end

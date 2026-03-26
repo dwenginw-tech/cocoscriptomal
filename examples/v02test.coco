@@ -1,0 +1,28 @@
+#include "io"
+
+*// v0.2 feature test
+
+func main()
+    *// string escapes
+    print("hello\tworld")
+    print("line1\nline2")
+
+    *// multiple assignment
+    local a, b, c = 10, 20, 30
+    print(a)
+    print(b)
+    print(c)
+
+    *// break
+    local i = 0
+    while 1 do
+        if i == 3 then
+            break
+        end
+        print(i)
+        i = i + 1
+    end
+
+    print("done")
+    halt()
+end

@@ -1,0 +1,5 @@
+(library
+ (name backend)
+ (public_name cocoscript.backend)
+ (wrapped false)
+ (libraries lang))

@@ -1,0 +1,33 @@
+#include "io"
+
+func main()
+    print("--- break ---")
+    local i = 0
+    while 1 do
+        if i == 5 then
+            break
+        end
+        print(i)
+        i = i + 1
+    end
+
+    print("--- len ---")
+    print(len("hello"))
+    print(len("CocoScript"))
+
+    print("--- tostring ---")
+    local s = tostring(42)
+    print(s)
+
+    print("--- toint ---")
+    local n = toint("99")
+    print(n + 1)
+
+    print("--- multi print ---")
+    print("a")
+    print("b")
+    print("c")
+
+    print("done")
+    halt()
+end

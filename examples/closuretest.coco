@@ -1,0 +1,14 @@
+func main()
+    local x = 10
+    local add = func(y)
+        return x + y
+    end
+    print(add(5))
+    print(add(20))
+
+    local name = "hello"
+    local greet = func()
+        print(name)
+    end
+    greet()
+end

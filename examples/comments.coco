@@ -1,0 +1,9 @@
+#include "io"
+
+*// this is a comment
+func main()
+    *// print some stuff
+    print("comments work!")
+    print(1 * 2)  *// multiplication still works
+    halt()
+end
