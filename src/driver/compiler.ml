@@ -18,7 +18,13 @@ let resolve_includes base_dir (prog : Ast.program) =
         let exe_dir = Filename.dirname Sys.executable_name in
         let lib_path = Filename.concat (Filename.concat exe_dir "lib") (inc_path ^ ".coco") in
         if Sys.file_exists lib_path then lib_path
-        else failwith (Printf.sprintf "cannot find include: %s" inc_path)
+        else
+          let src_lib = Filename.concat "src/lib" (inc_path ^ ".coco") in
+          if Sys.file_exists src_lib then src_lib
+          else
+            let lib_cwd = Filename.concat "lib" (inc_path ^ ".coco") in
+            if Sys.file_exists lib_cwd then lib_cwd
+            else failwith (Printf.sprintf "cannot find include: %s" inc_path)
     in
     let ic = open_in full_path in
     let source = In_channel.input_all ic in

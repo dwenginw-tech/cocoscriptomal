@@ -1,0 +1,9 @@
+#include "math"
+
+func main()
+  print(abs(0 - 5))
+  print(min(3, 7))
+  print(max(3, 7))
+  print(clamp(50, 0, 30))
+  print(sign(0 - 5))
+end

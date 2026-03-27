@@ -1,0 +1,17 @@
+func my_upper(s)
+  local result = ""
+  for i = 0, len(s) - 1 do
+    local c = char_at(s, i)
+    local code = char_code(c)
+    if code >= 97 and code <= 122 then
+      result = result .. from_char_code(code - 32)
+    else
+      result = result .. c
+    end
+  end
+  return result
+end
+
+func main()
+  print(my_upper("hello"))
+end

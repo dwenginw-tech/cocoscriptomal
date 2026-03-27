@@ -1,0 +1,109 @@
+func repeat(s, n)
+  local result = ""
+  for i = 1, n do
+    result = result .. s
+  end
+  return result
+end
+
+func starts_with(s, prefix)
+  local plen = len(prefix)
+  if len(s) < plen then
+    return false
+  end
+  local sub = substr(s, 0, plen)
+  if sub == prefix then
+    return true
+  end
+  return false
+end
+
+func ends_with(s, suffix)
+  local slen = len(s)
+  local suflen = len(suffix)
+  if slen < suflen then
+    return false
+  end
+  local sub = substr(s, slen - suflen, suflen)
+  if sub == suffix then
+    return true
+  end
+  return false
+end
+
+func contains(s, needle)
+  if index_of(s, needle) >= 0 then
+    return true
+  end
+  return false
+end
+
+func upper_char(c)
+  local code = char_code(c)
+  if code >= 97 and code <= 122 then
+    return from_char_code(code - 32)
+  end
+  return c
+end
+
+func lower_char(c)
+  local code = char_code(c)
+  if code >= 65 and code <= 90 then
+    return from_char_code(code + 32)
+  end
+  return c
+end
+
+func upper(s)
+  local result = ""
+  for i = 0, len(s) - 1 do
+    result = result .. upper_char(char_at(s, i))
+  end
+  return result
+end
+
+func lower(s)
+  local result = ""
+  for i = 0, len(s) - 1 do
+    result = result .. lower_char(char_at(s, i))
+  end
+  return result
+end
+
+func reverse(s)
+  local result = ""
+  for i = 0, len(s) - 1 do
+    result = char_at(s, i) .. result
+  end
+  return result
+end
+
+func trim_left(s)
+  local i = 0
+  while i < len(s) do
+    local c = char_code(char_at(s, i))
+    if c == 32 or c == 9 or c == 10 or c == 13 then
+      i = i + 1
+    else
+      return substr(s, i, len(s) - i)
+    end
+  end
+  return ""
+end
+
+func trim_right(s)
+  local i = len(s) - 1
+  while i >= 0 do
+    local c = char_code(char_at(s, i))
+    if c == 32 or c == 9 or c == 10 or c == 13 then
+      i = i - 1
+    else
+      return substr(s, 0, i + 1)
+    end
+  end
+  return ""
+end
+
+func trim(s)
+  return trim_left(trim_right(s))
+end

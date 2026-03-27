@@ -17,6 +17,7 @@ type context = {
   mutable loop_end : string option;
   mutable current_class : string option;
   mutable pending_lambdas : string list;
+  func_ret : (string, valtype) Hashtbl.t;
 }
 
 let create () = {
@@ -30,6 +31,7 @@ let create () = {
   loop_end = None;
   current_class = None;
   pending_lambdas = [];
+  func_ret = Hashtbl.create 16;
 }
 
 (* append one line of asm to the output buffer *)
@@ -94,8 +96,23 @@ let rec infer_type cg (expr : Ast.expr) =
   | Ast.Call ("input", _) -> TStr
   | Ast.Call ("tostring", _) -> TStr
   | Ast.Call ("toint", _) -> TInt
+  | Ast.Call ("tofloat", _) -> TFloat
   | Ast.Call ("len", _) -> TInt
+  | Ast.Call ("sqrt", _) -> TFloat
+  | Ast.Call ("floor", _) -> TInt
+  | Ast.Call ("ceil", _) -> TInt
+  | Ast.Call ("pow", _) -> TFloat
+  | Ast.Call ("sin", _) -> TFloat
+  | Ast.Call ("cos", _) -> TFloat
+  | Ast.Call ("tan", _) -> TFloat
+  | Ast.Call ("fmod", _) -> TFloat
+  | Ast.Call ("substr", _) -> TStr
+  | Ast.Call ("char_at", _) -> TStr
+  | Ast.Call ("char_code", _) -> TInt
+  | Ast.Call ("from_char_code", _) -> TStr
+  | Ast.Call ("index_of", _) -> TInt
   | Ast.Call (name, _) when Hashtbl.mem Class.classes name -> TObj name
+  | Ast.Call (name, _) when Hashtbl.mem cg.func_ret name -> Hashtbl.find cg.func_ret name
   | Ast.Lambda _ -> TClosure
   | Ast.TableLit (first :: _) -> TArray (infer_type cg first)
   | Ast.TableLit [] -> TArray TInt
@@ -122,7 +139,9 @@ let free_vars params body =
   let used = Hashtbl.create 16 in
   let defined = Hashtbl.create 16 in
   List.iter (fun p -> Hashtbl.replace defined p true) params;
-  let builtins = ["print";"exit";"halt";"exec";"input";"len";"tostring";"toint";"push";"pop"] in
+  let builtins = ["print";"exit";"halt";"exec";"input";"len";"tostring";"toint";"push";"pop";
+    "sqrt";"floor";"ceil";"pow";"sin";"cos";"tan";"fmod";
+    "substr";"char_at";"char_code";"from_char_code";"index_of";"tofloat"] in
   List.iter (fun b -> Hashtbl.replace defined b true) builtins;
   let rec walk_expr = function
     | Ast.Ident name -> Hashtbl.replace used name true
@@ -179,12 +198,34 @@ let rec compile_expr cg (expr : Ast.expr) =
     let off = lookup_var cg name in
     asmf cg "    mov rax, [rbp-%d]" off
   | Ast.BinOp (op, left, right) ->
+    let lty = infer_type cg left in
     compile_expr cg left;
     asm cg "    push rax";
     compile_expr cg right;
     asm cg "    mov rcx, rax";
     asm cg "    pop rax";
-    emit_binop cg op
+    (match op, lty with
+     | (Ast.Eq | Ast.Neq), TStr ->
+       asm cg "    push rcx";
+       asm cg "    push rax";
+       asm cg "    mov rdx, rcx";
+       asm cg "    mov rcx, rax";
+       asm cg "    mov rbx, rsp";
+       asm cg "    and rsp, -16";
+       asm cg "    sub rsp, 32";
+       asm cg "    call strcmp";
+       asm cg "    mov rsp, rbx";
+       asm cg "    add rsp, 16";
+       if op = Ast.Eq then begin
+         asm cg "    cmp rax, 0";
+         asm cg "    sete al";
+         asm cg "    movzx rax, al"
+       end else begin
+         asm cg "    cmp rax, 0";
+         asm cg "    setne al";
+         asm cg "    movzx rax, al"
+       end
+     | _ -> emit_binop cg op)
   | Ast.UnaryOp (Neg, e) ->
     compile_expr cg e;
     asm cg "    neg rax"
@@ -347,6 +388,7 @@ and compile_lambda cg params body =
     loop_end = None;
     current_class = None;
     pending_lambdas = [];
+    func_ret = cg.func_ret;
   } in
   List.iter (compile_stmt sub_cg) body;
   (* sync shared state back *)
@@ -486,6 +528,34 @@ and compile_call cg name args =
     builtin_push cg args
   else if name = "pop" then
     builtin_pop cg args
+  else if name = "sqrt" then
+    builtin_sqrt cg args
+  else if name = "floor" then
+    builtin_floor cg args
+  else if name = "ceil" then
+    builtin_ceil cg args
+  else if name = "pow" then
+    builtin_pow cg args
+  else if name = "sin" then
+    builtin_sin cg args
+  else if name = "cos" then
+    builtin_cos cg args
+  else if name = "tan" then
+    builtin_tan cg args
+  else if name = "fmod" then
+    builtin_fmod cg args
+  else if name = "tofloat" then
+    builtin_tofloat cg args
+  else if name = "substr" then
+    builtin_substr cg args
+  else if name = "char_at" then
+    builtin_char_at cg args
+  else if name = "char_code" then
+    builtin_char_code cg args
+  else if name = "from_char_code" then
+    builtin_from_char_code cg args
+  else if name = "index_of" then
+    builtin_index_of cg args
   else begin
     let regs = [| "rcx"; "rdx"; "r8"; "r9" |] in
     let n = List.length args in
@@ -674,6 +744,226 @@ and builtin_pop cg args =
     asm cg "    mov rax, [rax+rcx*8]"
   | _ -> failwith "pop takes 1 argument (array)"
 
+(* math builtins — all use C math library via xmm0/xmm1 *)
+and builtin_sqrt cg args =
+  match args with
+  | [arg] ->
+    compile_expr cg arg;
+    asm cg "    movq xmm0, rax";
+    asm cg "    sqrtsd xmm0, xmm0";
+    asm cg "    movq rax, xmm0"
+  | _ -> failwith "sqrt takes 1 argument"
+
+and builtin_floor cg args =
+  match args with
+  | [arg] ->
+    compile_expr cg arg;
+    asm cg "    movq xmm0, rax";
+    asm cg "    roundsd xmm0, xmm0, 1";
+    asm cg "    cvttsd2si rax, xmm0"
+  | _ -> failwith "floor takes 1 argument"
+
+and builtin_ceil cg args =
+  match args with
+  | [arg] ->
+    compile_expr cg arg;
+    asm cg "    movq xmm0, rax";
+    asm cg "    roundsd xmm0, xmm0, 2";
+    asm cg "    cvttsd2si rax, xmm0"
+  | _ -> failwith "ceil takes 1 argument"
+
+and builtin_pow cg args =
+  match args with
+  | [base_; exp_] ->
+    compile_expr cg base_;
+    asm cg "    push rax";
+    compile_expr cg exp_;
+    asm cg "    movq xmm1, rax";
+    asm cg "    pop rcx";
+    asm cg "    movq xmm0, rcx";
+    asm cg "    mov rbx, rsp";
+    asm cg "    and rsp, -16";
+    asm cg "    sub rsp, 32";
+    asm cg "    call pow";
+    asm cg "    mov rsp, rbx";
+    asm cg "    movq rax, xmm0"
+  | _ -> failwith "pow takes 2 arguments (base, exponent)"
+
+and builtin_sin cg args =
+  match args with
+  | [arg] ->
+    compile_expr cg arg;
+    asm cg "    movq xmm0, rax";
+    asm cg "    mov rbx, rsp";
+    asm cg "    and rsp, -16";
+    asm cg "    sub rsp, 32";
+    asm cg "    call sin";
+    asm cg "    mov rsp, rbx";
+    asm cg "    movq rax, xmm0"
+  | _ -> failwith "sin takes 1 argument"
+
+and builtin_cos cg args =
+  match args with
+  | [arg] ->
+    compile_expr cg arg;
+    asm cg "    movq xmm0, rax";
+    asm cg "    mov rbx, rsp";
+    asm cg "    and rsp, -16";
+    asm cg "    sub rsp, 32";
+    asm cg "    call cos";
+    asm cg "    mov rsp, rbx";
+    asm cg "    movq rax, xmm0"
+  | _ -> failwith "cos takes 1 argument"
+
+and builtin_tan cg args =
+  match args with
+  | [arg] ->
+    compile_expr cg arg;
+    asm cg "    movq xmm0, rax";
+    asm cg "    mov rbx, rsp";
+    asm cg "    and rsp, -16";
+    asm cg "    sub rsp, 32";
+    asm cg "    call tan";
+    asm cg "    mov rsp, rbx";
+    asm cg "    movq rax, xmm0"
+  | _ -> failwith "tan takes 1 argument"
+
+and builtin_fmod cg args =
+  match args with
+  | [a; b] ->
+    compile_expr cg a;
+    asm cg "    push rax";
+    compile_expr cg b;
+    asm cg "    movq xmm1, rax";
+    asm cg "    pop rcx";
+    asm cg "    movq xmm0, rcx";
+    asm cg "    mov rbx, rsp";
+    asm cg "    and rsp, -16";
+    asm cg "    sub rsp, 32";
+    asm cg "    call fmod";
+    asm cg "    mov rsp, rbx";
+    asm cg "    movq rax, xmm0"
+  | _ -> failwith "fmod takes 2 arguments"
+
+and builtin_tofloat cg args =
+  match args with
+  | [arg] ->
+    compile_expr cg arg;
+    asm cg "    cvtsi2sd xmm0, rax";
+    asm cg "    movq rax, xmm0"
+  | _ -> failwith "tofloat takes 1 argument"
+
+(* string builtins *)
+and builtin_substr cg args =
+  match args with
+  | [str; start; length] ->
+    compile_expr cg length;
+    asm cg "    push rax";
+    compile_expr cg start;
+    asm cg "    push rax";
+    compile_expr cg str;
+    asm cg "    push rax";
+    (* alloc len+1 bytes for result *)
+    asm cg "    mov rcx, [rsp+16]";
+    asm cg "    inc rcx";
+    asm cg "    mov rbx, rsp";
+    asm cg "    and rsp, -16";
+    asm cg "    sub rsp, 32";
+    asm cg "    call _coco_alloc";
+    asm cg "    mov rsp, rbx";
+    asm cg "    push rax";
+    (* memcpy(dest, src+start, len) *)
+    asm cg "    mov rcx, rax";
+    asm cg "    mov rdx, [rsp+8]";
+    asm cg "    add rdx, [rsp+16]";
+    asm cg "    mov r8, [rsp+24]";
+    asm cg "    mov rbx, rsp";
+    asm cg "    and rsp, -16";
+    asm cg "    sub rsp, 32";
+    asm cg "    call memcpy";
+    asm cg "    mov rsp, rbx";
+    (* null-terminate *)
+    asm cg "    pop rax";
+    asm cg "    mov rcx, [rsp+16]";
+    asm cg "    mov byte [rax+rcx], 0";
+    asm cg "    add rsp, 24"
+  | _ -> failwith "substr takes 3 arguments (string, start, length)"
+
+and builtin_char_at cg args =
+  match args with
+  | [str; idx] ->
+    compile_expr cg idx;
+    asm cg "    push rax";
+    compile_expr cg str;
+    asm cg "    pop rcx";
+    asm cg "    push rax";
+    asm cg "    push rcx";
+    (* alloc 2 bytes *)
+    asm cg "    mov rcx, 2";
+    asm cg "    mov rbx, rsp";
+    asm cg "    and rsp, -16";
+    asm cg "    sub rsp, 32";
+    asm cg "    call _coco_alloc";
+    asm cg "    mov rsp, rbx";
+    asm cg "    pop rcx";
+    asm cg "    pop rdx";
+    asm cg "    movzx r8, byte [rdx+rcx]";
+    asm cg "    mov [rax], r8b";
+    asm cg "    mov byte [rax+1], 0"
+  | _ -> failwith "char_at takes 2 arguments (string, index)"
+
+and builtin_char_code cg args =
+  match args with
+  | [str] ->
+    compile_expr cg str;
+    asm cg "    movzx rax, byte [rax]"
+  | _ -> failwith "char_code takes 1 argument (string)"
+
+and builtin_from_char_code cg args =
+  match args with
+  | [code] ->
+    compile_expr cg code;
+    asm cg "    push rax";
+    asm cg "    mov rcx, 2";
+    asm cg "    mov rbx, rsp";
+    asm cg "    and rsp, -16";
+    asm cg "    sub rsp, 32";
+    asm cg "    call _coco_alloc";
+    asm cg "    mov rsp, rbx";
+    asm cg "    pop rcx";
+    asm cg "    mov [rax], cl";
+    asm cg "    mov byte [rax+1], 0"
+  | _ -> failwith "from_char_code takes 1 argument (char code)"
+
+and builtin_index_of cg args =
+  match args with
+  | [haystack; needle] ->
+    compile_expr cg needle;
+    asm cg "    push rax";
+    compile_expr cg haystack;
+    asm cg "    push rax";
+    (* strstr(haystack, needle) *)
+    asm cg "    mov rcx, rax";
+    asm cg "    mov rdx, [rsp+8]";
+    asm cg "    mov rbx, rsp";
+    asm cg "    and rsp, -16";
+    asm cg "    sub rsp, 32";
+    asm cg "    call strstr";
+    asm cg "    mov rsp, rbx";
+    asm cg "    test rax, rax";
+    let not_found = next_label cg "indexof_nf" in
+    let done_ = next_label cg "indexof_done" in
+    asmf cg "    jz %s" not_found;
+    asm cg "    pop rcx";
+    asm cg "    sub rax, rcx";
+    asm cg "    add rsp, 8";
+    asmf cg "    jmp %s" done_;
+    asmf cg "%s:" not_found;
+    asm cg "    add rsp, 16";
+    asm cg "    mov rax, -1";
+    asmf cg "%s:" done_
+  | _ -> failwith "index_of takes 2 arguments (haystack, needle)"
+
 and compile_stmt cg (stmt : Ast.stmt) =
   match stmt with
   | Ast.LocalDecl (name, expr) ->
@@ -828,6 +1118,12 @@ let compile_function cg (f : Ast.func_def) =
   (match cg.current_class with
    | Some cn -> cg.type_env <- ("self", TObj cn) :: cg.type_env
    | None -> ());
+  List.iter (fun p ->
+    let key = f.name ^ "." ^ p in
+    match Hashtbl.find_opt cg.func_ret key with
+    | Some t -> cg.type_env <- (p, t) :: cg.type_env
+    | None -> ()
+  ) f.params;
   let mangled = mangle f.name in
   asmf cg "global %s" mangled;
   asmf cg "%s:" mangled;
@@ -855,25 +1151,125 @@ let compile_function cg (f : Ast.func_def) =
 (* encode a string for NASM db directives, emitting non-printable
    and special chars as raw byte values instead of inside quotes *)
 let encode_nasm_string str =
-  let buf = Buffer.create (String.length str * 4) in
-  let in_quotes = ref false in
-  String.iter (fun ch ->
-    let code = Char.code ch in
-    if code >= 32 && code < 127 && ch <> '"' && ch <> '\\' then begin
-      if not !in_quotes then (if Buffer.length buf > 0 then Buffer.add_string buf ", "; Buffer.add_char buf '"'; in_quotes := true);
-      Buffer.add_char buf ch
-    end else begin
-      if !in_quotes then (Buffer.add_char buf '"'; in_quotes := false);
-      if Buffer.length buf > 0 then Buffer.add_string buf ", ";
-      Buffer.add_string buf (string_of_int code)
-    end
-  ) str;
-  if !in_quotes then Buffer.add_char buf '"';
-  Buffer.contents buf
+  if String.length str = 0 then "0" (* empty string: just the null terminator *)
+  else begin
+    let buf = Buffer.create (String.length str * 4) in
+    let in_quotes = ref false in
+    String.iter (fun ch ->
+      let code = Char.code ch in
+      if code >= 32 && code < 127 && ch <> '"' && ch <> '\\' then begin
+        if not !in_quotes then (if Buffer.length buf > 0 then Buffer.add_string buf ", "; Buffer.add_char buf '"'; in_quotes := true);
+        Buffer.add_char buf ch
+      end else begin
+        if !in_quotes then (Buffer.add_char buf '"'; in_quotes := false);
+        if Buffer.length buf > 0 then Buffer.add_string buf ", ";
+        Buffer.add_string buf (string_of_int code)
+      end
+    ) str;
+    if !in_quotes then Buffer.add_char buf '"';
+    Buffer.contents buf
+  end
 
-(* pre-scan: find constructor calls and register field types before
-   compiling class methods. this way Dog_info knows self.name is a string
-   even though Dog_init compiles before main *)
+let preregister_func_types cg (prog : Ast.program) =
+  let func_params : (string, string list) Hashtbl.t = Hashtbl.create 16 in
+  List.iter (fun (f : Ast.func_def) ->
+    Hashtbl.replace func_params f.name f.params
+  ) prog.functions;
+  let rec scan_call_expr cg = function
+    | Ast.Call (name, args) ->
+      (match Hashtbl.find_opt func_params name with
+       | Some params ->
+         List.iteri (fun i arg ->
+           if i < List.length params then begin
+             let param = List.nth params i in
+             let key = name ^ "." ^ param in
+             let ty = infer_type cg arg in
+             if ty <> TInt then
+               Hashtbl.replace cg.func_ret key ty
+           end
+         ) args
+       | None -> ());
+      List.iter (scan_call_expr cg) args
+    | Ast.BinOp (_, a, b) -> scan_call_expr cg a; scan_call_expr cg b
+    | Ast.UnaryOp (_, e) -> scan_call_expr cg e
+    | Ast.Index (a, b) -> scan_call_expr cg a; scan_call_expr cg b
+    | Ast.TableLit es -> List.iter (scan_call_expr cg) es
+    | Ast.FieldGet (e, _) -> scan_call_expr cg e
+    | Ast.MethodCall (e, _, args) -> scan_call_expr cg e; List.iter (scan_call_expr cg) args
+    | _ -> ()
+  in
+  let rec scan_call_stmt cg = function
+    | Ast.LocalDecl (_, e) | Ast.Assign (_, e) | Ast.ExprStmt e | Ast.Return e ->
+      scan_call_expr cg e
+    | Ast.IfStmt (c, t, f) ->
+      scan_call_expr cg c;
+      List.iter (scan_call_stmt cg) t;
+      List.iter (scan_call_stmt cg) f
+    | Ast.WhileStmt (c, b) ->
+      scan_call_expr cg c; List.iter (scan_call_stmt cg) b
+    | Ast.ForStmt (_, s, e, b) ->
+      scan_call_expr cg s; scan_call_expr cg e;
+      List.iter (scan_call_stmt cg) b
+    | Ast.ForEach (_, e, b) ->
+      scan_call_expr cg e; List.iter (scan_call_stmt cg) b
+    | _ -> ()
+  in
+  List.iter (fun (f : Ast.func_def) ->
+    let local_cg = { cg with type_env = [] } in
+    List.iter (fun p ->
+      let key = f.name ^ "." ^ p in
+      match Hashtbl.find_opt cg.func_ret key with
+      | Some t -> local_cg.type_env <- (p, t) :: local_cg.type_env
+      | None -> ()
+    ) f.params;
+    let scan_with_env stmt =
+      (match stmt with
+       | Ast.LocalDecl (name, e) ->
+         let ty = infer_type local_cg e in
+         local_cg.type_env <- (name, ty) :: local_cg.type_env
+       | Ast.Assign (name, e) ->
+         let ty = infer_type local_cg e in
+         local_cg.type_env <- (name, ty) :: local_cg.type_env
+       | _ -> ());
+      scan_call_stmt local_cg stmt
+    in
+    List.iter scan_with_env f.body
+  ) prog.functions;
+  let scan_func cg (f : Ast.func_def) =
+    let local_cg = { cg with type_env = [] } in
+    List.iter (fun p ->
+      let key = f.name ^ "." ^ p in
+      let ty = match Hashtbl.find_opt cg.func_ret key with
+        | Some t -> t | None -> TInt in
+      local_cg.type_env <- (p, ty) :: local_cg.type_env
+    ) f.params;
+    let rec scan_stmt = function
+      | Ast.LocalDecl (name, e) ->
+        let ty = infer_type local_cg e in
+        local_cg.type_env <- (name, ty) :: local_cg.type_env;
+        None
+      | Ast.Assign (name, e) ->
+        let ty = infer_type local_cg e in
+        local_cg.type_env <- (name, ty) :: local_cg.type_env;
+        None
+      | Ast.Return e -> Some (infer_type local_cg e)
+      | Ast.IfStmt (_, t, f) ->
+        let t_ty = List.find_map scan_stmt t in
+        if t_ty <> None then t_ty
+        else List.find_map scan_stmt f
+      | Ast.WhileStmt (_, b) -> List.find_map scan_stmt b
+      | Ast.ForStmt (_, _, _, b) -> List.find_map scan_stmt b
+      | Ast.ForEach (_, _, b) -> List.find_map scan_stmt b
+      | _ -> None
+    in
+    List.find_map scan_stmt f.body
+  in
+  List.iter (fun (f : Ast.func_def) ->
+    match scan_func cg f with
+    | Some ty -> Hashtbl.replace cg.func_ret f.name ty
+    | None -> ()
+  ) prog.functions
+
 let preregister_field_types cg (prog : Ast.program) =
   let scan_expr = function
     | Ast.Call (name, args) when Hashtbl.mem Class.classes name ->
@@ -925,10 +1321,22 @@ let compile_program (prog : Ast.program) =
   asm cg "extern strlen";
   asm cg "extern atoi";
   asm cg "extern getchar";
+  asm cg "extern sqrt";
+  asm cg "extern floor";
+  asm cg "extern ceil";
+  asm cg "extern pow";
+  asm cg "extern sin";
+  asm cg "extern cos";
+  asm cg "extern tan";
+  asm cg "extern fmod";
+  asm cg "extern strstr";
+  asm cg "extern memcpy";
+  asm cg "extern strcmp";
   asm cg "";
   asm cg "section .text";
   asm cg "";
   Gc.emit_allocator (asm cg);
+  preregister_func_types cg prog;
   preregister_field_types cg prog;
   (List.iter (compile_function cg) prog.functions;
   (* data section: format strings + interned literals *)
@@ -944,7 +1352,10 @@ let compile_program (prog : Ast.program) =
     asmf cg "    %s db %s, 0" label (encode_nasm_string str)
   ) cg.strtab;
   List.iter (fun (f, label) ->
-    asmf cg "    %s dq %.17g" label f
+    let s = Printf.sprintf "%.17g" f in
+    let s = if String.contains s '.' || String.contains s 'e' || String.contains s 'E'
+      then s else s ^ ".0" in
+    asmf cg "    %s dq %s" label s
   ) cg.ftab;
   Buffer.contents cg.buf : string)
 

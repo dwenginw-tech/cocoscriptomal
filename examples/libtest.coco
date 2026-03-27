@@ -1,0 +1,39 @@
+#include "math"
+#include "string"
+
+func main()
+  print(sqrt(144.0))
+  print(floor(3.7))
+  print(ceil(3.2))
+  print(pow(2.0, 10.0))
+  print(sin(0.0))
+  print(cos(0.0))
+  print(abs(0 - 42))
+  print(min(10, 20))
+  print(max(10, 20))
+  print(clamp(50, 0, 30))
+  print(sign(0 - 5))
+
+  local s = "Hello, World!"
+  print(substr(s, 0, 5))
+  print(char_at(s, 0))
+  print(char_code("A"))
+  print(from_char_code(90))
+  print(index_of(s, "World"))
+
+  print(upper("hello"))
+  print(lower("HELLO"))
+  print(reverse("abcd"))
+  print(repeat("ha", 3))
+
+  local test = "CocoScript"
+  if starts_with(test, "Coco") then
+    print("starts_with works")
+  end
+  if ends_with(test, "Script") then
+    print("ends_with works")
+  end
+  if contains(test, "oSc") then
+    print("contains works")
+  end
+end

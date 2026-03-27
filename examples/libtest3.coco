@@ -1,0 +1,10 @@
+#include "string"
+
+func main()
+  local s = "Hello, World!"
+  print(substr(s, 0, 5))
+  print(char_at(s, 0))
+  print(char_code("A"))
+  print(from_char_code(90))
+  print(index_of(s, "World"))
+end

@@ -1,0 +1,15 @@
+#include "math"
+
+func main()
+  print(sqrt(144.0))
+  print(floor(3.7))
+  print(ceil(3.2))
+  print(pow(2.0, 10.0))
+  print(sin(0.0))
+  print(cos(0.0))
+  print(abs(0 - 42))
+  print(min(10, 20))
+  print(max(10, 20))
+  print(clamp(50, 0, 30))
+  print(sign(0 - 5))
+end
