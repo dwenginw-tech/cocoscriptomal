@@ -1,6 +1,8 @@
 # CocoScript
 
-A native compiled programming language with C/Lua hybrid syntax. Built in OCaml, compiles to x86-64 assembly via NASM on Windows.
+A native compiled programming language with C/Lua hybrid syntax. Built in OCaml, compiles to x86-64 assembly via NASM.
+
+Supports Windows and Linux with platform-specific optimizations.
 
 ## Example
 
@@ -23,36 +25,107 @@ end
 
 ## Features
 
+- Cross-platform: Windows and Linux support
 - Integers, floats, booleans, strings, nil
 - Arrays with index read/write
 - String concatenation with `..`
 - Variables with `local`
 - Functions and recursion
+- Classes with methods and fields
+- Closures and lambdas
 - `if`/`elseif`/`else`/`end` blocks
 - `while`/`do`/`end` loops
-- `for` loops
+- `for` and `foreach` loops
 - Operators: `+ - * / % == != < > <= >= and or not`
-- Builtins: `print`, `input`, `exec`, `halt`, `exit`
+- Builtins: `print`, `input`, `exec`, `halt`, `exit`, `len`, `tostring`, `toint`, `tofloat`
+- Math library: `sqrt`, `floor`, `ceil`, `pow`, `sin`, `cos`, `tan`, `fmod`
+- String library: `substr`, `char_at`, `char_code`, `from_char_code`, `index_of`
+- Module system with `#include`
+
+## Installation
+
+### Linux (Recommended)
+
+Quick install with cocovm:
+
+```bash
+curl -o- https://raw.githubusercontent.com/dwenginw-tech/cocoscriptomal/main/install.sh | bash
+```
+
+Or manually:
+
+```bash
+git clone https://github.com/dwenginw-tech/cocoscriptomal
+cd cocoscriptomal
+chmod +x install.sh
+./install.sh
+```
+
+Then restart your terminal or run `source ~/.bashrc`
+
+### Windows
+
+Download the installer from the [releases page](https://github.com/dwenginw-tech/cocoscriptomal/releases).
+
+The installer includes everything needed: compiler, NASM, GCC, and standard library.
+
+## Usage
+
+### Linux
+
+```bash
+cocoscript myfile.coco
+./myfile
+```
+
+Or use the helper script:
+
+```bash
+./run.sh myfile.coco
+```
+
+### Windows
+
+```cmd
+cocoscript myfile.coco
+myfile.exe
+```
+
+Or use the helper script:
+
+```cmd
+run.bat myfile.coco
+```
+
+## Managing CocoScript (Linux)
+
+```bash
+cocovm update      # Update to latest version
+cocovm uninstall   # Remove CocoScript
+cocovm version     # Show installed version
+```
 
 ## Build from source
 
-Requires OCaml 5.4.1, opam, dune, NASM, and GCC (MinGW).
+Requires OCaml 5.4.1, opam, dune, NASM, and GCC (MinGW on Windows).
 
-```
+```bash
 opam exec -- dune build
 ```
 
-## Compile a .coco file
+Compile a file:
 
-```
+```bash
 opam exec -- dune exec cocoscript myfile.coco
-myfile.exe
 ```
 
 ## End users
 
-End users only need `cocoscript.exe`, NASM, and GCC. No OCaml required. Bundled releases will include everything in one zip.
+End users only need the CocoScript binary, NASM, and GCC. No OCaml required.
+
+- Linux: Dependencies are typically already installed or easily available via package manager
+- Windows: Bundled installer includes everything
 
 ## License
 
-GPL v3 — the compiler is open source. Programs you write in CocoScript can be any license you want.
+MIT — the compiler is open source. Programs you write in CocoScript can be any license you want.
