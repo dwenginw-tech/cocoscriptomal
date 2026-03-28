@@ -46,20 +46,14 @@ let emit_print_int cg =
   if is_linux then begin
     (* Linux: convert int to string, then write syscall *)
     asm cg "    push rax";
-    if is_linux then begin
-      asm cg "    mov rdi, 64";
-      asm cg "    call _coco_alloc"
-    end else begin
-      asm cg "    mov rcx, 64";
-      asm cg "    sub rsp, 32";
-      asm cg "    call _coco_alloc";
-      asm cg "    add rsp, 32"
-    end;
+    asm cg "    mov rdi, 64";
+    asm cg "    call _coco_alloc";
     asm cg "    pop rdx";
     asm cg "    push rax";
-    asm cg "    mov rsi, rdx";
-    asm cg "    lea rdx, [rel fmt_int_bare]";
+    (* sprintf(buf, fmt, value) -> rdi=buf, rsi=fmt, rdx=value *)
     asm cg "    mov rdi, rax";
+    asm cg "    lea rsi, [rel fmt_int_bare]";
+    (* rdx already has the value *)
     asm cg "    xor rax, rax";
     asm cg "    call sprintf";
     asm cg "    pop rdi";
