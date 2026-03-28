@@ -1342,10 +1342,17 @@ let compile_function cg (f : Ast.func_def) =
   ) f.params;
   List.iter (compile_stmt cg) f.body;
   (* default return 0 if control falls through *)
-  asm cg "    xor rax, rax";
-  asm cg "    mov rsp, rbp";
-  asm cg "    pop rbp";
-  asm cg "    ret";
+  if is_linux && f.name = "main" then begin
+    (* On Linux, main should call exit syscall instead of returning *)
+    asm cg "    xor rdi, rdi";
+    asm cg "    mov rax, 60";
+    asm cg "    syscall"
+  end else begin
+    asm cg "    xor rax, rax";
+    asm cg "    mov rsp, rbp";
+    asm cg "    pop rbp";
+    asm cg "    ret"
+  end;
   asm cg "";
   (* emit any lambda functions that were created inside this function *)
   List.iter (fun lam_code -> Buffer.add_string cg.buf lam_code) cg.pending_lambdas;
