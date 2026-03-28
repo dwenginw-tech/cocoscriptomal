@@ -70,7 +70,7 @@ let compile source output_name =
           gcc obj_file exe_file
       else
         Printf.sprintf
-          "\"%s\" %s -o %s -nostartfiles -e main"
+          "\"%s\" %s -o %s -no-pie -nostartfiles -e main"
           gcc obj_file exe_file
     in
     let link_ret = Sys.command link_cmd in
