@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentation - CocoScript</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="docs.css">
+</head>
+<body>
+    <nav>
+        <div class="container">
+            <div class="logo">CocoScript</div>
+            <ul>
+                <li><a href="index.html">Home</a></li>
+                <li><a href="docs.html">Docs</a></li>
+                <li><a href="playground.html">Playground</a></li>
+                <li><a href="https://github.com/dwenginw-tech/cocoscriptomal" target="_blank">GitHub</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="docs-container">
+        <aside class="sidebar">
+            <h3>Documentation</h3>
+            <ul>
+                <li><a href="#getting-started">Getting Started</a></li>
+                <li><a href="#syntax">Syntax Basics</a></li>
+                <li><a href="#variables">Variables</a></li>
+                <li><a href="#functions">Functions</a></li>
+                <li><a href="#classes">Classes</a></li>
+                <li><a href="#stdlib">Standard Library</a></li>
+            </ul>
+        </aside>
+
+        <main class="docs-content">
+            <h1>CocoScript Documentation</h1>
+
+            <section id="getting-started">
+                <h2>Getting Started</h2>
+                <p>CocoScript is a compiled language that generates native x64 assembly. To get started, clone the repository and build the compiler:</p>
+                <pre><code>git clone https://github.com/dwenginw-tech/cocoscriptomal.git
+cd cocoscriptomal
+dune build
+./_build/default/src/driver/main.exe yourfile.coco</code></pre>
+            </section>
+
+            <section id="syntax">
+                <h2>Syntax Basics</h2>
+                <p>CocoScript uses a C-like syntax with semicolons and curly braces:</p>
+                <pre><code>// Single-line comment
+/* Multi-line
+   comment */
+
+print("Hello, World!");</code></pre>
+            </section>
+
+            <section id="variables">
+                <h2>Variables</h2>
+                <p>Declare variables with <code>let</code>:</p>
+                <pre><code>let x = 42;
+let name = "CocoScript";
+let result = x + 10;</code></pre>
+            </section>
+
+            <section id="functions">
+                <h2>Functions</h2>
+                <p>Define functions with parameters and return values:</p>
+                <pre><code>function add(a, b) {
+    return a + b;
+}
+
+let sum = add(5, 3);
+print(sum);</code></pre>
+                <p>Functions support closures:</p>
+                <pre><code>function makeCounter() {
+    let count = 0;
+    return function() {
+        count = count + 1;
+        return count;
+    };
+}
+
+let counter = makeCounter();
+print(counter()); // 1
+print(counter()); // 2</code></pre>
+            </section>
+
+            <section id="classes">
+                <h2>Classes</h2>
+                <p>CocoScript supports object-oriented programming with classes:</p>
+                <pre><code>class Person {
+    constructor(name, age) {
+        this.name = name;
+        this.age = age;
+    }
+
+    greet() {
+        print("Hi, I'm " + this.name);
+    }
+}
+
+let person = Person("Alice", 30);
+person.greet();</code></pre>
+            </section>
+
+            <section id="stdlib">
+                <h2>Standard Library</h2>
+                <p>CocoScript includes built-in libraries for common tasks:</p>
+                <h3>Math Library</h3>
+                <pre><code>include "math.coco";
+
+let result = Math.sqrt(16);
+let power = Math.pow(2, 8);</code></pre>
+                <h3>String Library</h3>
+                <pre><code>include "string.coco";
+
+let length = String.length("hello");
+let upper = String.toUpper("hello");</code></pre>
+            </section>
+        </main>
+    </div>
+
+    <footer>
+        <div class="container">
+            <p>CocoScript &copy; 2026 | MIT License</p>
+        </div>
+    </footer>
+</body>
+</html>
