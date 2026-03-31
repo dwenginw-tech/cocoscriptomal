@@ -1,6 +1,9 @@
 let keywords = [
   "func",   Token.Func;
   "local",  Token.Local;
+  "import", Token.Import;
+  "from",   Token.From;
+  "as",     Token.As;
   "if",     Token.If;
   "then",   Token.Then;
   "else",   Token.Else;

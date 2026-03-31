@@ -1,0 +1,24 @@
+-- Text file processor demonstrating new stdlib features
+
+func main()
+    print("=== Text Processor ===")
+    print("")
+    
+    -- Test string functions directly
+    local test1 = "  TODO: Implement feature"
+    local clean1 = trim(test1)
+    print("Trimmed:")
+    print(clean1)
+    
+    local upper1 = upper(clean1)
+    print("Uppercase:")
+    print(upper1)
+    
+    local test2 = "  What is this?  "
+    local clean2 = trim(test2)
+    local lower2 = lower(clean2)
+    print("Lowercase:")
+    print(lower2)
+    
+    halt()
+end

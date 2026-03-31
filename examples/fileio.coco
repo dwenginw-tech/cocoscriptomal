@@ -1,0 +1,35 @@
+func main()
+    -- Write to a file
+    local content = "Hello from CocoScript!"
+    local result = write_file("test.txt", content)
+    
+    if result == 1 then
+        print("File written successfully")
+    else
+        print("Failed to write file")
+    end
+    
+    -- Read the file back
+    local data = read_file("test.txt")
+    if data then
+        print("File contents:")
+        print(data)
+    else
+        print("Failed to read file")
+    end
+    
+    -- Append to file
+    append_file("test.txt", "\nAppended line")
+    
+    -- Read again
+    data = read_file("test.txt")
+    print("After append:")
+    print(data)
+    
+    -- Check if file exists
+    if file_exists("test.txt") == 1 then
+        print("File exists!")
+    end
+    
+    halt()
+end

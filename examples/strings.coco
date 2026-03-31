@@ -1,0 +1,38 @@
+func main()
+    local text = "  Hello World  "
+    
+    -- Trim whitespace
+    local trimmed = trim(text)
+    print("Trimmed:")
+    print(trimmed)
+    
+    -- Convert to uppercase
+    local upper_text = upper("hello")
+    print("Uppercase:")
+    print(upper_text)
+    
+    -- Convert to lowercase
+    local lower_text = lower("WORLD")
+    print("Lowercase:")
+    print(lower_text)
+    
+    -- Check prefix
+    if starts_with("hello world", "hello") == 1 then
+        print("Starts with 'hello'")
+    end
+    
+    -- Check suffix
+    if ends_with("hello world", "world") == 1 then
+        print("Ends with 'world'")
+    end
+    
+    -- String operations
+    local name = "CocoScript"
+    print("First char:")
+    print(char_at(name, 0))
+    
+    print("Substring:")
+    print(substr(name, 0, 4))
+    
+    halt()
+end

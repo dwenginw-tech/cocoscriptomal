@@ -1,0 +1,4 @@
+(library
+ (name debug)
+ (public_name cocoscript.debug)
+ (modules error))

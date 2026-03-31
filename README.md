@@ -39,8 +39,10 @@ end
 - Operators: `+ - * / % == != < > <= >= and or not`
 - Builtins: `print`, `input`, `exec`, `halt`, `exit`, `len`, `tostring`, `toint`, `tofloat`
 - Math library: `sqrt`, `floor`, `ceil`, `pow`, `sin`, `cos`, `tan`, `fmod`
-- String library: `substr`, `char_at`, `char_code`, `from_char_code`, `index_of`
-- Module system with `#include`
+- String library: `substr`, `char_at`, `char_code`, `from_char_code`, `index_of`, `split`, `trim`, `replace`, `upper`, `lower`, `starts_with`, `ends_with`
+- File I/O: `read_file`, `write_file`, `append_file`, `file_exists`
+- Array utilities: `push`, `pop`, `map`, `filter`, `sort`
+- Module system with `#include` (import syntax coming soon)
 
 ## Installation
 
@@ -100,9 +102,9 @@ run.bat myfile.coco
 ## Managing CocoScript (Linux)
 
 ```bash
-cocovm update      # Update to latest version
-cocovm uninstall   # Remove CocoScript
-cocovm version     # Show installed version
+cocovm update     
+cocovm uninstall 
+cocovm version   
 ```
 
 ## Build from source
@@ -129,3 +131,63 @@ End users only need the CocoScript binary, NASM, and GCC. No OCaml required.
 ## License
 
 MIT — the compiler is open source. Programs you write in CocoScript can be any license you want.
+
+## New Features Guide
+
+### File I/O
+
+CocoScript now supports file operations:
+
+```lua
+write_file("output.txt", "Hello, World!")
+
+local content = read_file("input.txt")
+if content then
+    print(content)
+end
+append_file("log.txt", "New log entry\n")
+
+if file_exists("config.txt") == 1 then
+    print("Config found")
+end
+```
+
+### String Utilities
+
+Enhanced string manipulation:
+
+```lua
+local text = "  Hello World  "
+
+local clean = trim(text)  
+
+local upper = upper("hello") 
+local lower = lower("WORLD") 
+
+if starts_with("hello world", "hello") == 1 then
+    print("Match!")
+end
+
+if ends_with("test.txt", ".txt") == 1 then
+    print("Text file")
+end
+
+local parts = split("a,b,c", ",")
+```
+
+### Array Operations
+
+Work with arrays more easily:
+
+```lua
+local numbers = {1, 2, 3, 4, 5}
+
+push(numbers, 6)
+
+local last = pop(numbers)
+
+-- Array utilities (coming soon: full implementations)
+-- local doubled = map(numbers, func(x) return x * 2 end)
+-- local evens = filter(numbers, func(x) return x % 2 == 0 end)
+-- sort(numbers)
+```

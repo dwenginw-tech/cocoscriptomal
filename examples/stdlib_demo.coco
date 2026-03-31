@@ -1,0 +1,66 @@
+func main()
+    print("=== CocoScript Standard Library Demo ===")
+    print("")
+    
+    -- String utilities
+    print("--- String Utilities ---")
+    local text = "  CocoScript  "
+    print("Original: [" .. text .. "]")
+    print("Trimmed: [" .. trim(text) .. "]")
+    print("Uppercase: " .. upper("hello"))
+    print("Lowercase: " .. lower("WORLD"))
+    
+    if starts_with("CocoScript", "Coco") == 1 then
+        print("Starts with 'Coco': yes")
+    end
+    
+    if ends_with("test.coco", ".coco") == 1 then
+        print("Ends with '.coco': yes")
+    end
+    print("")
+    
+    -- File I/O
+    print("--- File I/O ---")
+    local filename = "demo_output.txt"
+    local write_result = write_file(filename, "Line 1\n")
+    
+    if write_result == 1 then
+        print("File written successfully")
+        
+        -- Append more content
+        append_file(filename, "Line 2\n")
+        append_file(filename, "Line 3\n")
+        
+        -- Read it back
+        local content = read_file(filename)
+        if content then
+            print("File contents:")
+            print(content)
+        end
+        
+        -- Check existence
+        if file_exists(filename) == 1 then
+            print("File exists: yes")
+        end
+    else
+        print("Failed to write file")
+    end
+    print("")
+    
+    -- Array operations
+    print("--- Array Operations ---")
+    local numbers = {1, 2, 3}
+    print("Original array length: " .. tostring(len(numbers)))
+    
+    push(numbers, 4)
+    push(numbers, 5)
+    print("After push: length = " .. tostring(len(numbers)))
+    
+    local last = pop(numbers)
+    print("Popped value: " .. tostring(last))
+    print("After pop: length = " .. tostring(len(numbers)))
+    print("")
+    
+    print("=== Demo Complete ===")
+    halt()
+end
