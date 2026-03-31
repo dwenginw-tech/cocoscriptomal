@@ -1,11 +1,11 @@
 [Setup]
 AppName=CocoScript
-AppVersion=0.1.0
+AppVersion=0.4.0
 AppPublisher=AppleJuiceStudios
 DefaultDirName={autopf}\CocoScript
 DefaultGroupName=CocoScript
 OutputDir=installer_output
-OutputBaseFilename=cocoscript-setup
+OutputBaseFilename=cocoscript-0.4.0-setup
 SetupIconFile=assets\icon.ico
 Compression=lzma2
 SolidCompression=yes
@@ -23,6 +23,9 @@ Source: "tools\x86_64-w64-mingw32\lib\*"; DestDir: "{app}\tools\x86_64-w64-mingw
 Source: "examples\*"; DestDir: "{app}\examples"; Flags: ignoreversion
 Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "CHANGELOG.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "STDLIB_REFERENCE.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "src\lib\*.coco"; DestDir: "{app}\lib"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\CocoScript Examples"; Filename: "{app}\examples"

@@ -1,6 +1,6 @@
 # CocoScript Changelog
 
-## Version 0.2.0 - Standard Library Expansion
+## Version 0.4.0 - Standard Library Expansion
 
 ### New Features
 
@@ -48,6 +48,18 @@ New example files demonstrating features:
 - Array utility functions (map, filter, sort) have placeholder implementations
 - Full implementations require closure calling support
 - `replace()` function currently returns original string unchanged
+
+## Version 0.3.0 - Bug Fixes and Improvements
+
+- Stability improvements
+- Performance optimizations
+- Bug fixes in parser and codegen
+
+## Version 0.2.0 - Enhanced Features
+
+- Improved class system
+- Better closure support
+- Additional math functions
 
 ## Version 0.1.0 - Initial Release
 
