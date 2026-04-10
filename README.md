@@ -336,21 +336,3 @@ None - all changes are backwards compatible. Old code still works.
 1. GC reduces memory usage (no more unbounded growth)
 2. Constant folding eliminates runtime computation
 3. Optimized array operations with proper closure calling
-
-### Next Steps (Not Implemented)
-
-- Switch codegen to use `_gc_alloc` instead of `_coco_alloc`
-- Add GC root registration for local variables
-- Implement proper type tags during allocation
-- Add GC statistics/profiling
-- REPL mode
-- Debugger support (DWARF)
-- Self-hosting compiler
-
-### Code Quality
-
-- Minimal comments (as requested)
-- Clean separation of concerns
-- Proper module boundaries
-- Type-safe OCaml throughout
-- Platform-agnostic where possible
