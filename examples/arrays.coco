@@ -1,0 +1,19 @@
+#include "io"
+
+func main()
+    local arr = {10, 20, 30, 40, 50}
+    print("Array length:")
+    print(len(arr))
+
+    local i = 0
+    while i < len(arr) do
+        print(arr[i])
+        i = i + 1
+    end
+
+    push(arr, 60)
+    print("After push:")
+    print(len(arr))
+    print(arr[5])
+    halt()
+end

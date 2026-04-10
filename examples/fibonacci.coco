@@ -1,0 +1,17 @@
+#include "io"
+
+func fib(n)
+    if n <= 1 then
+        return n
+    end
+    return fib(n - 1) + fib(n - 2)
+end
+
+func main()
+    local i = 0
+    while i <= 20 do
+        print(fib(i))
+        i = i + 1
+    end
+    halt()
+end

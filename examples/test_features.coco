@@ -1,0 +1,36 @@
+func double(x)
+    return x * 2
+end
+
+func is_even(x)
+    return x % 2 == 0
+end
+
+func main()
+    local nums = {1, 2, 3, 4, 5}
+    
+    print("Original:")
+    for i = 0, 4 do
+        print(nums[i])
+    end
+    
+    local doubled = map(nums, double)
+    print("Doubled:")
+    for i = 0, 4 do
+        print(doubled[i])
+    end
+    
+    local evens = filter(nums, is_even)
+    print("Evens:")
+    local len = len(evens)
+    for i = 0, len - 1 do
+        print(evens[i])
+    end
+    
+    local unsorted = {5, 2, 8, 1, 9}
+    sort(unsorted)
+    print("Sorted:")
+    for i = 0, 4 do
+        print(unsorted[i])
+    end
+end

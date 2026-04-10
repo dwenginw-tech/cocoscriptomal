@@ -1,0 +1,4 @@
+(library
+ (name optimize)
+ (libraries lang)
+ (wrapped false))

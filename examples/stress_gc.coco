@@ -1,0 +1,12 @@
+#include "io"
+
+func main()
+    local i = 0
+    while i < 10000 do
+        local s = "hello" .. " world" .. " test"
+        i = i + 1
+    end
+    print("Survived 10k string concats")
+    print(i)
+    halt()
+end

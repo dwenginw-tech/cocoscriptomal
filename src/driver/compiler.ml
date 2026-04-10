@@ -13,39 +13,15 @@ let find_tool name =
 let builtin_modules = ["io"]
 
 let resolve_includes base_dir (prog : Ast.program) =
-  let included_funcs = ref [] in
-  List.iter (fun inc_path ->
-    if List.mem inc_path builtin_modules then ()
-    else
-    let full_path =
-      let p = Filename.concat base_dir (inc_path ^ ".coco") in
-      if Sys.file_exists p then p
-      else
-        let exe_dir = Filename.dirname Sys.executable_name in
-        let lib_path = Filename.concat (Filename.concat exe_dir "lib") (inc_path ^ ".coco") in
-        if Sys.file_exists lib_path then lib_path
-        else
-          let src_lib = Filename.concat "src/lib" (inc_path ^ ".coco") in
-          if Sys.file_exists src_lib then src_lib
-          else
-            let lib_cwd = Filename.concat "lib" (inc_path ^ ".coco") in
-            if Sys.file_exists lib_cwd then lib_cwd
-            else failwith (Printf.sprintf "cannot find include: %s" inc_path)
-    in
-    let ic = open_in full_path in
-    let source = In_channel.input_all ic in
-    close_in ic;
-    let tokens = Lexer.tokenize source in
-    let inc_ast = Parser.parse tokens in
-    included_funcs := inc_ast.functions @ !included_funcs
-  ) prog.includes;
-  { prog with functions = List.rev !included_funcs @ prog.functions }
+  Module_resolver.check_circular_deps prog base_dir;
+  Module_resolver.resolve_imports prog base_dir
 
 let compile source output_name =
   let tokens = Lexer.tokenize source in
   let ast = Parser.parse tokens in
   let base_dir = Filename.dirname output_name in
   let ast = resolve_includes base_dir ast in
+  let ast = Optimizer.optimize_program ast in
   let asm = Codegen.gen_program ast in
 
   let asm_file = output_name ^ ".asm" in

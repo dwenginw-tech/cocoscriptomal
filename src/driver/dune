@@ -1,4 +1,4 @@
 (executable
  (name main)
  (public_name cocoscript)
- (libraries lang backend))
+ (libraries lang backend debug modules optimize))

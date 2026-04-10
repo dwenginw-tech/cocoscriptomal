@@ -1,0 +1,4 @@
+#include "io" 
+func main() 
+    print("GC works!") 
+end 

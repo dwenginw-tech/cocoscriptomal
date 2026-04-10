@@ -47,7 +47,7 @@ let emit_print_int cg =
     (* Linux: convert int to string, then write syscall *)
     asm cg "    push rax";
     asm cg "    mov rdi, 64";
-    asm cg "    call _coco_alloc";
+    asm cg "    call _gc_alloc";
     asm cg "    pop rdx";
     asm cg "    push rax";
     (* sprintf(buf, fmt, value) -> rdi=buf, rsi=fmt, rdx=value *)
@@ -116,7 +116,7 @@ let emit_print_float cg =
     asm cg "    movq xmm0, rax";
     asm cg "    push rax";
     asm cg "    mov rdi, 64";
-    asm cg "    call _coco_alloc";
+    asm cg "    call _gc_alloc";
     asm cg "    pop rdx";
     asm cg "    movq xmm0, rdx";
     asm cg "    push rax";
@@ -234,6 +234,14 @@ let rec infer_type cg (expr : Ast.expr) =
   | Ast.Call ("replace", _) -> TStr
   | Ast.Call ("starts_with", _) -> TInt
   | Ast.Call ("ends_with", _) -> TInt
+  | Ast.Call ("abs", _) -> TInt
+  | Ast.Call ("min", _) -> TInt
+  | Ast.Call ("max", _) -> TInt
+  | Ast.Call ("clamp", _) -> TInt
+  | Ast.Call ("sign", _) -> TInt
+  | Ast.Call ("reverse", _) -> TStr
+  | Ast.Call ("repeat", _) -> TStr
+  | Ast.Call ("contains", _) -> TInt
   | Ast.Call (name, _) when Hashtbl.mem Class.classes name -> TObj name
   | Ast.Call (name, _) when Hashtbl.mem cg.func_ret name -> Hashtbl.find cg.func_ret name
   | Ast.Lambda _ -> TClosure
@@ -376,11 +384,11 @@ let rec compile_expr cg (expr : Ast.expr) =
     let size = (n + 1) * 8 in
     if is_linux then begin
       asmf cg "    mov rdi, %d" size;
-      asm cg "    call _coco_alloc"
+      asm cg "    call _gc_alloc"
     end else begin
       asmf cg "    mov rcx, %d" size;
       asm cg "    sub rsp, 32";
-      asm cg "    call _coco_alloc";
+      asm cg "    call _gc_alloc";
       asm cg "    add rsp, 32"
     end;
     asmf cg "    mov qword [rax], %d" n;
@@ -453,11 +461,11 @@ and emit_binop cg (op : Ast.binop) =
     asm cg "    push rax";
     if is_linux then begin
       asm cg "    mov rdi, 1024";
-      asm cg "    call _coco_alloc"
+      asm cg "    call _gc_alloc"
     end else begin
       asm cg "    sub rsp, 32";  (* shadow space *)
       asm cg "    mov rcx, 1024";
-      asm cg "    call _coco_alloc";
+      asm cg "    call _gc_alloc";
       asm cg "    add rsp, 32"
     end;
     asm cg "    pop r8";         (* left str *)
@@ -555,11 +563,11 @@ and compile_lambda cg params body =
     let size = ncap * 8 in
     if is_linux then begin
       asmf cg "    mov rdi, %d" size;
-      asm cg "    call _coco_alloc"
+      asm cg "    call _gc_alloc"
     end else begin
       asmf cg "    mov rcx, %d" size;
       asm cg "    sub rsp, 32";
-      asm cg "    call _coco_alloc";
+      asm cg "    call _gc_alloc";
       asm cg "    add rsp, 32"
     end;
     (* copy captured values into env *)
@@ -574,11 +582,11 @@ and compile_lambda cg params body =
   (* malloc closure pair [func_ptr | env_ptr] *)
   if is_linux then begin
     asm cg "    mov rdi, 16";
-    asm cg "    call _coco_alloc"
+    asm cg "    call _gc_alloc"
   end else begin
     asm cg "    mov rcx, 16";
     asm cg "    sub rsp, 32";
-    asm cg "    call _coco_alloc";
+    asm cg "    call _gc_alloc";
     asm cg "    add rsp, 32"
   end;
   asm cg "    pop rcx";  (* env ptr *)
@@ -615,11 +623,11 @@ and compile_closure_call cg name args =
 and compile_new_obj cg cls_name args =
   if is_linux then begin
     asm cg "    mov rdi, 256";
-    asm cg "    call _coco_alloc"
+    asm cg "    call _gc_alloc"
   end else begin
     asm cg "    mov rcx, 256";
     asm cg "    sub rsp, 32";
-    asm cg "    call _coco_alloc";
+    asm cg "    call _gc_alloc";
     asm cg "    add rsp, 32"
   end;
   let cls = Class.find_class cls_name in
@@ -754,6 +762,22 @@ and compile_call cg name args =
     builtin_filter cg args
   else if name = "sort" then
     builtin_sort cg args
+  else if name = "abs" then
+    builtin_abs cg args
+  else if name = "min" then
+    builtin_min cg args
+  else if name = "max" then
+    builtin_max cg args
+  else if name = "clamp" then
+    builtin_clamp cg args
+  else if name = "sign" then
+    builtin_sign cg args
+  else if name = "reverse" then
+    builtin_reverse cg args
+  else if name = "repeat" then
+    builtin_repeat cg args
+  else if name = "contains" then
+    builtin_contains cg args
   else begin
     let n = List.length args in
     (* evaluate all args and push to stack first —
@@ -863,7 +887,7 @@ and builtin_input cg args =
     if is_linux then begin
       (* Linux: allocate buffer, then read syscall *)
       asm cg "    mov rdi, 1024";
-      asm cg "    call _coco_alloc";
+      asm cg "    call _gc_alloc";
       asm cg "    push rax";
       (* read(0, buf, 1023) *)
       asm cg "    mov rdi, 0";
@@ -885,7 +909,7 @@ and builtin_input cg args =
       (* Windows: scanf *)
       asm cg "    mov rcx, 1024";
       asm cg "    sub rsp, 32";
-      asm cg "    call _coco_alloc";
+      asm cg "    call _gc_alloc";
       asm cg "    add rsp, 32";
       asm cg "    push rax";
       asm cg "    lea rcx, [rel fmt_input]";
@@ -929,7 +953,7 @@ and builtin_tostring cg args =
     asm cg "    mov rbx, rsp";
     asm cg "    and rsp, -16";
     asm cg "    sub rsp, 32";
-    asm cg "    call _coco_alloc";
+    asm cg "    call _gc_alloc";
     asm cg "    mov rsp, rbx";
     asm cg "    pop rdx";
     asm cg "    push rax";
@@ -1106,7 +1130,7 @@ and builtin_substr cg args =
     asm cg "    mov rbx, rsp";
     asm cg "    and rsp, -16";
     asm cg "    sub rsp, 32";
-    asm cg "    call _coco_alloc";
+    asm cg "    call _gc_alloc";
     asm cg "    mov rsp, rbx";
     asm cg "    push rax";
     (* memcpy(dest, src+start, len) *)
@@ -1140,7 +1164,7 @@ and builtin_char_at cg args =
     asm cg "    mov rbx, rsp";
     asm cg "    and rsp, -16";
     asm cg "    sub rsp, 32";
-    asm cg "    call _coco_alloc";
+    asm cg "    call _gc_alloc";
     asm cg "    mov rsp, rbx";
     asm cg "    pop rcx";
     asm cg "    pop rdx";
@@ -1165,7 +1189,7 @@ and builtin_from_char_code cg args =
     asm cg "    mov rbx, rsp";
     asm cg "    and rsp, -16";
     asm cg "    sub rsp, 32";
-    asm cg "    call _coco_alloc";
+    asm cg "    call _gc_alloc";
     asm cg "    mov rsp, rbx";
     asm cg "    pop rcx";
     asm cg "    mov [rax], cl";
@@ -1461,11 +1485,11 @@ and builtin_split cg args =
     (* Count occurrences to know array size *)
     if is_linux then begin
       asm cg "    mov rdi, 256";
-      asm cg "    call _coco_alloc"
+      asm cg "    call _gc_alloc"
     end else begin
       asm cg "    mov rcx, 256";
       asm cg "    sub rsp, 32";
-      asm cg "    call _coco_alloc";
+      asm cg "    call _gc_alloc";
       asm cg "    add rsp, 32"
     end;
     asm cg "    mov qword [rax], 0";  (* placeholder length *)
@@ -1533,7 +1557,7 @@ and builtin_trim cg args =
     asm cg "    mov rbx, rsp";
     asm cg "    and rsp, -16";
     asm cg "    sub rsp, 32";
-    asm cg "    call _coco_alloc";
+    asm cg "    call _gc_alloc";
     asm cg "    mov rsp, rbx";
     asm cg "    pop rsi";
     asm cg "    pop r8";
@@ -1576,7 +1600,7 @@ and builtin_upper cg args =
     asm cg "    mov rbx, rsp";
     asm cg "    and rsp, -16";
     asm cg "    sub rsp, 32";
-    asm cg "    call _coco_alloc";
+    asm cg "    call _gc_alloc";
     asm cg "    mov rsp, rbx";
     asm cg "    pop rcx";
     asm cg "    pop rsi";
@@ -1618,7 +1642,7 @@ and builtin_lower cg args =
     asm cg "    mov rbx, rsp";
     asm cg "    and rsp, -16";
     asm cg "    sub rsp, 32";
-    asm cg "    call _coco_alloc";
+    asm cg "    call _gc_alloc";
     asm cg "    mov rsp, rbx";
     asm cg "    pop rcx";
     asm cg "    pop rsi";
@@ -1727,25 +1751,357 @@ and builtin_ends_with cg args =
     asmf cg "%s:" done_lbl
   | _ -> failwith "ends_with takes 2 arguments (string, suffix)"
 
-(* Array utility builtins - simplified implementations *)
+(* Array utility builtins - full implementations *)
 and builtin_map cg args =
   match args with
-  | [arr; _func] ->
-    (* For now, just return the array - full impl needs closure calling *)
-    compile_expr cg arr
+  | [arr; func] ->
+    (* map(array, func) - apply func to each element, return new array *)
+    compile_expr cg func;  (* closure *)
+    asm cg "    push rax";  (* save closure *)
+    compile_expr cg arr;
+    asm cg "    push rax";  (* save array *)
+    (* Get array length *)
+    asm cg "    mov rcx, [rax-8]";
+    asm cg "    push rcx";  (* save length *)
+    (* Allocate new array *)
+    asm cg "    shl rcx, 3";
+    asm cg "    add rcx, 8";  (* length slot *)
+    if is_linux then begin
+      asm cg "    mov rdi, rcx";
+      asm cg "    call _gc_alloc"
+    end else begin
+      asm cg "    sub rsp, 32";
+      asm cg "    call _gc_alloc";
+      asm cg "    add rsp, 32"
+    end;
+    asm cg "    pop rcx";  (* length *)
+    asm cg "    mov [rax], rcx";
+    asm cg "    add rax, 8";
+    asm cg "    push rax";  (* save result array *)
+    (* Loop through elements *)
+    asm cg "    xor r12, r12";  (* index *)
+    let loop_lbl = next_label cg "map_loop" in
+    let done_lbl = next_label cg "map_done" in
+    asmf cg "%s:" loop_lbl;
+    asm cg "    cmp r12, rcx";
+    asmf cg "    jge %s" done_lbl;
+    (* Get element *)
+    asm cg "    mov rax, [rsp+16]";  (* source array *)
+    asm cg "    mov rax, [rax+r12*8]";
+    asm cg "    push rax";  (* arg for closure *)
+    (* Call closure *)
+    asm cg "    mov rax, [rsp+32]";  (* closure *)
+    asm cg "    mov r10, [rax+0]";  (* func ptr *)
+    asm cg "    mov rcx, [rax+8]";  (* env *)
+    asm cg "    pop rdx";  (* arg *)
+    asm cg "    sub rsp, 32";
+    asm cg "    call r10";
+    asm cg "    add rsp, 32";
+    (* Store result *)
+    asm cg "    mov rbx, [rsp]";  (* result array *)
+    asm cg "    mov [rbx+r12*8], rax";
+    asm cg "    inc r12";
+    asmf cg "    jmp %s" loop_lbl;
+    asmf cg "%s:" done_lbl;
+    asm cg "    pop rax";  (* result array *)
+    asm cg "    add rsp, 24"  (* clean up *)
   | _ -> failwith "map takes 2 arguments (array, function)"
 
 and builtin_filter cg args =
   match args with
-  | [arr; _func] ->
-    compile_expr cg arr
+  | [arr; func] ->
+    (* filter(array, predicate) - return new array with elements where predicate returns true *)
+    compile_expr cg func;
+    asm cg "    push rax";  (* save closure *)
+    compile_expr cg arr;
+    asm cg "    push rax";  (* save array *)
+    asm cg "    mov rcx, [rax-8]";
+    asm cg "    push rcx";  (* save length *)
+    (* Allocate result array (max size = input size) *)
+    asm cg "    shl rcx, 3";
+    asm cg "    add rcx, 8";
+    if is_linux then begin
+      asm cg "    mov rdi, rcx";
+      asm cg "    call _gc_alloc"
+    end else begin
+      asm cg "    sub rsp, 32";
+      asm cg "    call _gc_alloc";
+      asm cg "    add rsp, 32"
+    end;
+    asm cg "    mov qword [rax], 0";  (* result length = 0 *)
+    asm cg "    add rax, 8";
+    asm cg "    push rax";  (* save result array *)
+    asm cg "    xor r12, r12";  (* source index *)
+    asm cg "    xor r13, r13";  (* result index *)
+    let loop_lbl = next_label cg "filter_loop" in
+    let done_lbl = next_label cg "filter_done" in
+    let skip_lbl = next_label cg "filter_skip" in
+    asmf cg "%s:" loop_lbl;
+    asm cg "    mov rcx, [rsp+8]";  (* length *)
+    asm cg "    cmp r12, rcx";
+    asmf cg "    jge %s" done_lbl;
+    (* Get element *)
+    asm cg "    mov rax, [rsp+16]";  (* source array *)
+    asm cg "    mov rax, [rax+r12*8]";
+    asm cg "    push rax";  (* save element *)
+    asm cg "    push rax";  (* arg for closure *)
+    (* Call predicate *)
+    asm cg "    mov rax, [rsp+40]";  (* closure *)
+    asm cg "    mov r10, [rax+0]";
+    asm cg "    mov rcx, [rax+8]";
+    asm cg "    pop rdx";
+    asm cg "    sub rsp, 32";
+    asm cg "    call r10";
+    asm cg "    add rsp, 32";
+    asm cg "    pop rbx";  (* element *)
+    asm cg "    test rax, rax";
+    asmf cg "    jz %s" skip_lbl;
+    (* Include element *)
+    asm cg "    mov rax, [rsp]";  (* result array *)
+    asm cg "    mov [rax+r13*8], rbx";
+    asm cg "    inc r13";
+    asmf cg "%s:" skip_lbl;
+    asm cg "    inc r12";
+    asmf cg "    jmp %s" loop_lbl;
+    asmf cg "%s:" done_lbl;
+    (* Update result length *)
+    asm cg "    mov rax, [rsp]";
+    asm cg "    mov [rax-8], r13";
+    asm cg "    add rsp, 32"  (* clean up *)
   | _ -> failwith "filter takes 2 arguments (array, function)"
 
 and builtin_sort cg args =
   match args with
   | [arr] ->
-    compile_expr cg arr
+    (* sort(array) - in-place quicksort for integers *)
+    compile_expr cg arr;
+    asm cg "    push rax";  (* save array *)
+    asm cg "    mov rcx, [rax-8]";  (* length *)
+    asm cg "    test rcx, rcx";
+    let done_lbl = next_label cg "sort_done" in
+    asmf cg "    jz %s" done_lbl;
+    (* Call quicksort helper *)
+    if is_linux then begin
+      asm cg "    mov rdi, rax";  (* array *)
+      asm cg "    xor rsi, rsi";  (* lo = 0 *)
+      asm cg "    mov rdx, rcx";
+      asm cg "    dec rdx";  (* hi = len - 1 *)
+      asm cg "    call _coco_quicksort"
+    end else begin
+      asm cg "    mov rcx, rax";
+      asm cg "    xor rdx, rdx";
+      asm cg "    mov r8, [rax-8]";
+      asm cg "    dec r8";
+      asm cg "    sub rsp, 32";
+      asm cg "    call _coco_quicksort";
+      asm cg "    add rsp, 32"
+    end;
+    asmf cg "%s:" done_lbl;
+    asm cg "    pop rax"
   | _ -> failwith "sort takes 1 argument (array)"
+
+and builtin_abs cg args =
+  match args with
+  | [v] ->
+    compile_expr cg v;
+    asm cg "    cqo";
+    asm cg "    xor rax, rdx";
+    asm cg "    sub rax, rdx"
+  | _ -> failwith "abs takes 1 argument"
+
+and builtin_min cg args =
+  match args with
+  | [a; b] ->
+    compile_expr cg b;
+    asm cg "    push rax";
+    compile_expr cg a;
+    asm cg "    pop rdx";
+    asm cg "    cmp rax, rdx";
+    asm cg "    cmovg rax, rdx"
+  | _ -> failwith "min takes 2 arguments"
+
+and builtin_max cg args =
+  match args with
+  | [a; b] ->
+    compile_expr cg b;
+    asm cg "    push rax";
+    compile_expr cg a;
+    asm cg "    pop rdx";
+    asm cg "    cmp rax, rdx";
+    asm cg "    cmovl rax, rdx"
+  | _ -> failwith "max takes 2 arguments"
+
+and builtin_clamp cg args =
+  match args with
+  | [v; lo; hi] ->
+    compile_expr cg hi;
+    asm cg "    push rax";
+    compile_expr cg lo;
+    asm cg "    push rax";
+    compile_expr cg v;
+    asm cg "    pop rdx";   (* lo *)
+    asm cg "    pop rcx";   (* hi *)
+    asm cg "    cmp rax, rdx";
+    asm cg "    cmovl rax, rdx";
+    asm cg "    cmp rax, rcx";
+    asm cg "    cmovg rax, rcx"
+  | _ -> failwith "clamp takes 3 arguments (value, min, max)"
+
+and builtin_sign cg args =
+  match args with
+  | [v] ->
+    compile_expr cg v;
+    let pos_lbl = next_label cg "sign_pos" in
+    let neg_lbl = next_label cg "sign_neg" in
+    let done_lbl = next_label cg "sign_done" in
+    asm cg "    cmp rax, 0";
+    asmf cg "    jg %s" pos_lbl;
+    asmf cg "    jl %s" neg_lbl;
+    asm cg "    xor rax, rax";
+    asmf cg "    jmp %s" done_lbl;
+    asmf cg "%s:" pos_lbl;
+    asm cg "    mov rax, 1";
+    asmf cg "    jmp %s" done_lbl;
+    asmf cg "%s:" neg_lbl;
+    asm cg "    mov rax, -1";
+    asmf cg "%s:" done_lbl
+  | _ -> failwith "sign takes 1 argument"
+
+and builtin_reverse cg args =
+  match args with
+  | [s] ->
+    compile_expr cg s;
+    asm cg "    push rax";
+    (* get length *)
+    if is_linux then begin
+      asm cg "    mov rdi, rax";
+      asm cg "    call strlen"
+    end else begin
+      asm cg "    mov rcx, rax";
+      asm cg "    sub rsp, 32";
+      asm cg "    call strlen";
+      asm cg "    add rsp, 32"
+    end;
+    asm cg "    mov r12, rax";  (* len *)
+    (* alloc new string *)
+    if is_linux then begin
+      asm cg "    lea rdi, [rax+1]";
+      asm cg "    call _gc_alloc"
+    end else begin
+      asm cg "    lea rcx, [rax+1]";
+      asm cg "    sub rsp, 32";
+      asm cg "    call _gc_alloc";
+      asm cg "    add rsp, 32"
+    end;
+    asm cg "    mov r13, rax";  (* dst *)
+    asm cg "    pop rsi";       (* src *)
+    (* reverse copy *)
+    let loop_lbl = next_label cg "rev_loop" in
+    let done_lbl = next_label cg "rev_done" in
+    asm cg "    xor rcx, rcx";
+    asmf cg "%s:" loop_lbl;
+    asm cg "    cmp rcx, r12";
+    asmf cg "    jge %s" done_lbl;
+    asm cg "    mov rdx, r12";
+    asm cg "    dec rdx";
+    asm cg "    sub rdx, rcx";
+    asm cg "    movzx eax, byte [rsi+rdx]";
+    asm cg "    mov [r13+rcx], al";
+    asm cg "    inc rcx";
+    asmf cg "    jmp %s" loop_lbl;
+    asmf cg "%s:" done_lbl;
+    asm cg "    mov byte [r13+r12], 0";
+    asm cg "    mov rax, r13"
+  | _ -> failwith "reverse takes 1 argument"
+
+and builtin_repeat cg args =
+  match args with
+  | [s; n] ->
+    compile_expr cg n;
+    asm cg "    push rax";
+    compile_expr cg s;
+    asm cg "    push rax";
+    (* get length *)
+    if is_linux then begin
+      asm cg "    mov rdi, rax";
+      asm cg "    call strlen"
+    end else begin
+      asm cg "    mov rcx, rax";
+      asm cg "    sub rsp, 32";
+      asm cg "    call strlen";
+      asm cg "    add rsp, 32"
+    end;
+    asm cg "    mov r12, rax";  (* str len *)
+    asm cg "    pop r14";       (* src string *)
+    asm cg "    pop r15";       (* count *)
+    (* alloc len*count+1 *)
+    asm cg "    imul rax, r15";
+    asm cg "    inc rax";
+    if is_linux then begin
+      asm cg "    mov rdi, rax";
+      asm cg "    call _gc_alloc"
+    end else begin
+      asm cg "    mov rcx, rax";
+      asm cg "    sub rsp, 32";
+      asm cg "    call _gc_alloc";
+      asm cg "    add rsp, 32"
+    end;
+    asm cg "    mov r13, rax";  (* dst *)
+    let loop_lbl = next_label cg "rep_loop" in
+    let done_lbl = next_label cg "rep_done" in
+    asm cg "    xor rcx, rcx";  (* iteration *)
+    asm cg "    mov rbx, r13";  (* write ptr *)
+    asmf cg "%s:" loop_lbl;
+    asm cg "    cmp rcx, r15";
+    asmf cg "    jge %s" done_lbl;
+    asm cg "    push rcx";
+    if is_linux then begin
+      asm cg "    mov rdi, rbx";
+      asm cg "    mov rsi, r14";
+      asm cg "    mov rdx, r12";
+      asm cg "    call memcpy"
+    end else begin
+      asm cg "    push rbx";
+      asm cg "    mov rcx, rbx";
+      asm cg "    mov rdx, r14";
+      asm cg "    mov r8, r12";
+      asm cg "    sub rsp, 32";
+      asm cg "    call memcpy";
+      asm cg "    add rsp, 32";
+      asm cg "    pop rbx"
+    end;
+    asm cg "    add rbx, r12";
+    asm cg "    pop rcx";
+    asm cg "    inc rcx";
+    asmf cg "    jmp %s" loop_lbl;
+    asmf cg "%s:" done_lbl;
+    asm cg "    mov byte [rbx], 0";
+    asm cg "    mov rax, r13"
+  | _ -> failwith "repeat takes 2 arguments (string, count)"
+
+and builtin_contains cg args =
+  match args with
+  | [haystack; needle] ->
+    compile_expr cg needle;
+    asm cg "    push rax";
+    compile_expr cg haystack;
+    (* strstr(haystack, needle) *)
+    if is_linux then begin
+      asm cg "    mov rdi, rax";
+      asm cg "    pop rsi";
+      asm cg "    call strstr"
+    end else begin
+      asm cg "    mov rcx, rax";
+      asm cg "    pop rdx";
+      asm cg "    sub rsp, 32";
+      asm cg "    call strstr";
+      asm cg "    add rsp, 32"
+    end;
+    (* return 1 if found, 0 if not *)
+    asm cg "    test rax, rax";
+    asm cg "    mov rax, 0";
+    asm cg "    setne al"
+  | _ -> failwith "contains takes 2 arguments (haystack, needle)"
 
 and compile_stmt cg (stmt : Ast.stmt) =
   match stmt with
@@ -1924,6 +2280,16 @@ let compile_function cg (f : Ast.func_def) =
     let off = lookup_var cg name in
     if i < Array.length regs then asmf cg "    mov [rbp-%d], %s" off regs.(i)
   ) f.params;
+  (* Initialize GC at start of main *)
+  if f.name = "main" then begin
+    if is_linux then
+      asm cg "    call _gc_init"
+    else begin
+      asm cg "    sub rsp, 32";
+      asm cg "    call _gc_init";
+      asm cg "    add rsp, 32"
+    end
+  end;
   List.iter (compile_stmt cg) f.body;
   (* default return 0 if control falls through *)
   if is_linux && f.name = "main" then begin
@@ -2133,7 +2499,7 @@ let compile_program (prog : Ast.program) =
     asm cg "extern ftell";
     asm cg "extern access"
   end else begin
-    (* Windows: msvcrt / ucrt *)
+      (* Windows: msvcrt / ucrt *)
     asm cg "extern printf";
     asm cg "extern exit";
     asm cg "extern malloc";
@@ -2167,7 +2533,8 @@ let compile_program (prog : Ast.program) =
   asm cg "";
   asm cg "section .text";
   asm cg "";
-  Gc.emit_allocator (asm cg);
+  Gc_marksweep.emit_gc_runtime (asm cg);
+  Array_helpers.emit_quicksort (asm cg);
   preregister_func_types cg prog;
   preregister_field_types cg prog;
   (List.iter (compile_function cg) prog.functions;
@@ -2192,7 +2559,7 @@ let compile_program (prog : Ast.program) =
     asm cg "    mode_w db \"w\", 0";
     asm cg "    mode_a db \"a\", 0"
   end;
-  Gc.emit_arena_data (asm cg);
+  Gc_marksweep.emit_gc_data (asm cg);
   List.iter (fun (str, label) ->
     asmf cg "    %s db %s, 0" label (encode_nasm_string str)
   ) cg.strtab;

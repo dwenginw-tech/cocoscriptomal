@@ -1,0 +1,23 @@
+#include "io"
+
+class Dog
+    func init(name, age)
+        self.name = name
+        self.age = age
+    end
+
+    func bark()
+        print(self.name .. " says: Woof!")
+    end
+
+    func info()
+        print(self.name .. " is " .. tostring(self.age) .. " years old")
+    end
+end
+
+func main()
+    local d = Dog("Rex", 3)
+    d.bark()
+    d.info()
+    halt()
+end

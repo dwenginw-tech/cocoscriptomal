@@ -6,15 +6,12 @@ let arena_end = "_coco_arena_end"
 
 let is_linux = Sys.os_type = "Unix"
 
-(* _coco_alloc: size in rcx (Windows) or rdi (Linux), returns pointer in rax.
-   bump-allocates from 1MB arenas, calls malloc for new blocks. *)
 let emit_allocator asm =
   asm (Printf.sprintf "global %s" alloc_fn);
   asm (Printf.sprintf "%s:" alloc_fn);
   asm "    push rbp";
   asm "    mov rbp, rsp";
   if is_linux then begin
-    (* Linux: size in rdi *)
     asm "    add rdi, 7";
     asm "    and rdi, -8";
     asm (Printf.sprintf "    mov rax, [rel %s]" arena_ptr);
@@ -42,7 +39,6 @@ let emit_allocator asm =
     asm "    pop rbp";
     asm "    ret"
   end else begin
-    (* Windows: size in rcx *)
     asm "    add rcx, 7";
     asm "    and rcx, -8";
     asm (Printf.sprintf "    mov rax, [rel %s]" arena_ptr);

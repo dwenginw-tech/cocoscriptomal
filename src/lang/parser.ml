@@ -2,10 +2,12 @@ type pstate = {
   tokens : Token.t array;
   mutable pos : int;
   mutable line : int;
+  mutable column : int;
+  filename : string;
 }
 
-let make_parser tokens =
-  { tokens = Array.of_list tokens; pos = 0; line = 1 }
+let make_parser ?(filename="<input>") tokens =
+  { tokens = Array.of_list tokens; pos = 0; line = 1; column = 1; filename }
 
 let current p =
   if p.pos >= Array.length p.tokens then Token.Eof
@@ -14,15 +16,22 @@ let current p =
 let eat p =
   let tok = current p in
   p.pos <- p.pos + 1;
+  (match tok with
+   | Token.Newline -> p.line <- p.line + 1; p.column <- 1
+   | _ -> p.column <- p.column + 1);
   tok
 
 let expect p tok =
   let got = eat p in
   if got <> tok then
-    failwith (Printf.sprintf "line %d: expected token, got something else" p.line)
+    let loc = Error.make_location p.filename p.line p.column in
+    Error.syntax_error
+      ~location:loc
+      ~hint:(Printf.sprintf "Expected %s" (Token.to_string tok))
+      (Printf.sprintf "Unexpected token: %s" (Token.to_string got))
 
 let skip_nl p =
-  while current p = Token.Newline do ignore (eat p); p.line <- p.line + 1 done
+  while current p = Token.Newline do ignore (eat p) done
 
 let block_ref : (pstate -> Ast.stmt list) ref = ref (fun _ -> [])
 
